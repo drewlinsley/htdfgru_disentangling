@@ -1,0 +1,99 @@
+# 100 augs
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=BSDS500_test --model=BSDS_vgg_cheap_deepest_final_simple --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_100_no_aux_augs_2019_05_20_18_21_17_393001/model_2520.ckpt-2520 --placeholders --test --out_dir=bsds_portrait --train=BSDS500_test_portrait --val=BSDS500_test_portrait
+
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=BSDS500_test --model=BSDS_vgg_cheap_deepest_final_simple --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_100_no_aux_augs_2019_05_20_18_21_17_393001/model_2520.ckpt-2520 --placeholders --test --out_dir=bsds_landscape --train=BSDS500_test_landscape --val=BSDS500_test_landscape
+
+# Prep data
+python utils/plot_bsds.py --f=bsds_portrait/BSDS_vgg_cheap_deepest_final_simple_BSDS500_test_2019_05_21_16_18_43_608909.npz --tag=100_aug
+python utils/plot_bsds.py --f=bsds_landscape/BSDS_vgg_cheap_deepest_final_simple_BSDS500_test_2019_05_21_16_19_44_153008.npz --tag=100_aug
+
+
+# 100
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=BSDS500_test --model=BSDS_vgg_cheap_deepest_final_simple --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_100_no_aux_2019_05_20_00_56_41_386546/model_1240.ckpt-1240 --placeholders --test --out_dir=bsds_portrait --train=BSDS500_test_portrait --val=BSDS500_test_portrait
+
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=BSDS500_test --model=BSDS_vgg_cheap_deepest_final_simple --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_100_no_aux_2019_05_20_00_56_41_386546/model_1240.ckpt-1240 --placeholders --test --out_dir=bsds_landscape --train=BSDS500_test_landscape --val=BSDS500_test_landscape
+
+# Prep data
+python utils/plot_bsds.py --f=bsds_portrait/BSDS_vgg_cheap_deepest_final_simple_BSDS500_test_2019_05_21_16_16_16_615409.npz --tag=100
+python utils/plot_bsds.py --f=bsds_landscape/BSDS_vgg_cheap_deepest_final_simple_BSDS500_test_2019_05_21_16_17_20_099478.npz --tag=100
+
+
+# 10
+CUDA_VISIBLE_DEVICES=3 python run_job.py --experiment=BSDS500_test --model=BSDS_vgg_cheap_deepest_final_simple --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_010_no_aux_2019_05_20_00_56_18_486429/model_280.ckpt-280 --placeholders --test --out_dir=bsds_landscape --train=BSDS500_test_landscape --val=BSDS500_test_landscape
+
+CUDA_VISIBLE_DEVICES=3 python run_job.py --experiment=BSDS500_test --model=BSDS_vgg_cheap_deepest_final_simple --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_010_no_aux_2019_05_20_00_56_18_486429/model_280.ckpt-280 --placeholders --test --out_dir=bsds_portrait --train=BSDS500_test_portrait --val=BSDS500_test_portrait
+
+# Prep data
+python utils/plot_bsds.py --f=bsds_portrait/BSDS_vgg_cheap_deepest_final_simple_BSDS500_test_2019_05_21_18_47_03_810284.npz --tag=010
+python utils/plot_bsds.py --f=bsds_landscape/BSDS_vgg_cheap_deepest_final_simple_BSDS500_test_2019_05_21_18_45_42_816401.npz --tag=010
+
+
+# 1
+CUDA_VISIBLE_DEVICES=3 python run_job.py --experiment=BSDS500_test --model=BSDS_vgg_cheap_deepest_final_simple --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_001_no_aux_2019_05_20_08_40_16_470144/model_240.ckpt-240 --placeholders --test --out_dir=bsds_landscape --train=BSDS500_test_landscape --val=BSDS500_test_landscape
+
+CUDA_VISIBLE_DEVICES=3 python run_job.py --experiment=BSDS500_test --model=BSDS_vgg_cheap_deepest_final_simple --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_001_no_aux_2019_05_20_08_40_16_470144/model_240.ckpt-240 --placeholders --test --out_dir=bsds_portrait --train=BSDS500_test_portrait --val=BSDS500_test_portrait
+
+# Prep data
+python utils/plot_bsds.py --f=bsds_portrait/BSDS_vgg_cheap_deepest_final_simple_BSDS500_test_2019_05_21_18_52_40_548766.npz --tag=001
+python utils/plot_bsds.py --f=bsds_landscape/BSDS_vgg_cheap_deepest_final_simple_BSDS500_test_2019_05_21_18_51_15_888018.npz --tag=001
+
+
+
+####
+# Connectomics viz timesteps
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=berson_test --model=refactored_v7_viz_timesteps --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/refactored_v7_star_combos_2019_05_20_18_18_02_986386/model_7700.ckpt-7700 --placeholders --test --out_dir=berson_viz --train=berson_test --val=berson_test
+mv refactored_v7_viz_timesteps refactored_v7_viz_timesteps_berson
+
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=snemi_test --model=refactored_v7_viz_timesteps --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/refactored_v7_star_combos_2019_05_20_18_12_51_819670/model_5450.ckpt-5450 --placeholders --test --out_dir=snemi_viz --train=snemi_test --val=snemi_test
+mv refactored_v7_viz_timesteps refactored_v7_viz_timesteps_snemi
+
+####
+# Berson 001
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=berson_test --model=refactored_v7 --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/refactored_v7_berson_combos_2019_05_20_22_09_11_100653/model_50.ckpt-50 --placeholders --test --out_dir=berson_001 --train=berson_test --val=berson_test
+
+# Berson 010
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=berson_test --model=refactored_v7 --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/refactored_v7_berson_combos_2019_05_20_18_09_21_584254/model_450.ckpt-450 --placeholders --test --out_dir=berson_010 --train=berson_test --val=berson_test
+
+# Berson 100
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=berson_test --model=refactored_v7 --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/refactored_v7_berson_combos_2019_05_20_18_09_47_458561/model_1000.ckpt-1000 --placeholders --test --out_dir=berson_100 --train=berson_test --val=berson_test
+
+# Berson 100 aug
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=berson_test --model=refactored_v7 --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/refactored_v7_star_combos_2019_05_20_18_18_02_986386/model_7700.ckpt-7700 --placeholders --test --out_dir=berson_100_aug --train=berson_test --val=berson_test
+
+
+
+####
+# Snemi 001
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=snemi_test --model=refactored_v7 --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/refactored_v7_snemi_combos_2019_05_20_18_11_52_689170/model_300.ckpt-300 --placeholders --test --out_dir=snemi_001 --train=snemi_test --val=snemi_test
+
+# Snemi 010
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=snemi_test --model=refactored_v7 --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/refactored_v7_snemi_combos_2019_05_21_11_13_22_025113/model_1250.ckpt-1250 --placeholders --test --out_dir=snemi_010 --train=snemi_test --val=snemi_test
+
+# Snemi 100
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=snemi_test --model=refactored_v7 --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/refactored_v7_snemi_combos_2019_05_20_18_12_42_453730/model_1800.ckpt-1800 --placeholders --test --out_dir=snemi_100 --train=snemi_test --val=snemi_test
+
+# Snemi 100 aug
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=snemi_test --model=refactored_v7 --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/refactored_v7_star_combos_2019_05_20_18_18_02_986386/model_7700.ckpt-7700 --placeholders --test --out_dir=snemi_100_aug --train=snemi_test --val=snemi_test
+
+
+#### UNet
+####
+# Berson 001
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=berson_test --model=seung_unet_per_pixel --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/seung_unet_per_pixel_instance_berson_combos_2019_05_07_16_28_45_434713/model_0.ckpt-0 --placeholders --test --out_dir=seung_berson_001 --train=berson_test --val=berson_test
+
+# Berson 010
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=berson_test --model=seung_unet_per_pixel --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/seung_unet_per_pixel_instance_berson_combos_2019_05_07_16_30_41_593745/model_350.ckpt-350 --placeholders --test --out_dir=seung_berson_010 --train=berson_test --val=berson_test
+
+# Berson 100
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=berson_test --model=seung_unet_per_pixel --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/seung_unet_per_pixel_instance_berson_combos_2019_05_07_16_14_25_517751/model_800.ckpt-800 --placeholders --test --out_dir=seung_berson_100 --train=berson_test --val=berson_test
+
+
+####
+# Snemi 001
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=snemi_test --model=seung_unet_per_pixel --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/seung_unet_per_pixel_instance_snemi_combos_2019_05_07_15_44_18_860332/model_550.ckpt-550 --placeholders --test --out_dir=seung_snemi_001 --train=snemi_test --val=snemi_test
+
+# Snemi 010
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=snemi_test --model=seung_unet_per_pixel --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/seung_unet_per_pixel_instance_snemi_combos_2019_05_07_15_46_56_846007/model_1600.ckpt-1600 --placeholders --test --out_dir=seung_snemi_010 --train=snemi_test --val=snemi_test
+
+# Snemi 100
+CUDA_VISIBLE_DEVICES=5 python run_job.py --experiment=snemi_test --model=seung_unet_per_pixel --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/seung_unet_per_pixel_instance_snemi_combos_2019_05_07_15_50_56_721578/model_1700.ckpt-1700 --placeholders --test --out_dir=seung_snemi_100 --train=snemi_test --val=snemi_test

@@ -1,0 +1,2 @@
+CUDA_VISIBLE_DEVICES=6 python run_job.py --experiment=pathfinder_14 --model=h_fgru --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/h_fgru_pathfinder_14_2019_07_26_20_26_42_362203/model_28000.ckpt-28000 --no_db --test --out_dir=test_rebut
+CUDA_VISIBLE_DEVICES=6 python run_job.py --experiment=pathfinder_14 --model=td_fgru --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/td_fgru_pathfinder_14_2019_07_28_07_37_09_889087/model_28000.ckpt-28000 --no_db --test --out_dir=test_rebut

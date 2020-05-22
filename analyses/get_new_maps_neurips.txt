@@ -1,0 +1,38 @@
+
+
+files = glob('maps/*.npz')
+for f in files:
+    d = np.load(f)
+    conf = d['config'].item()
+    v = conf.val_dataset
+    e = conf.experiment
+    o = conf.model
+    m = np.mean(d['maps'])
+    if 'star' in e and o == 'seung_unet_per_pixel':
+        print('%s %s %s %s %s' % (v, e, o, m, f))
+ 
+
+
+
+
+
+
+maps = []
+files = glob('maps/seung_unet_per_pixel_berson_combos_2019_05_24_23_01_56_701047.npz')
+for f in files:
+    d = np.load(f)
+    conf = d['config'].item()
+    v = conf.val_dataset
+    e = conf.experiment
+    o = conf.model
+    data = d['val_dict']
+    ms = []
+    for r in data:
+        # im = r['images']
+        lab = r['labels']
+        log = r['logits']
+        ms += [metrics.average_precision_score(y_score=tf_fun.sigmoid_fun(log.squeeze()), y_true=np.abs(1 - lab.squeeze()))]
+    m = np.nanmean(ms)
+    print('%s %s %s %s %s' % (f, v, e, o, m))
+    maps += []
+

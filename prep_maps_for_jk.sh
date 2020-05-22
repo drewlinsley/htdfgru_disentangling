@@ -1,0 +1,3 @@
+python analyses/plot_bsds.py --f=bsds_portrait_lower_thresh/BSDS_vgg_cheap_deepest_final_simple_BSDS500_test_2019_07_13_15_07_25_481069.npz --tag=100_hed_lt
+python analyses/plot_bsds.py --f=bsds_landscape_lower_thresh/BSDS_vgg_cheap_deepest_final_simple_BSDS500_test_2019_07_13_15_05_17_789057.npz --tag=100_hed_lt
+
