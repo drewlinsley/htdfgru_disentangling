@@ -23,6 +23,7 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
             reuse,
             fgru_normalization_type,
             ff_normalization_type,
+            perturb=None,
             layer_name='recurrent_vgg16',
             ff_nl=tf.nn.relu,
             horizontal_kernel_initializer=tf.initializers.orthogonal(),
@@ -35,9 +36,11 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
             train_norm_params=None,
             train_fgru_kernels=None,
             train_fgru_params=None,
+            downsampled=False, 
             up_kernel=None,
             stop_loop=False,
             recurrent_ff=False,
+            perturb_method="kernel",  # "hidden_state",  # "kernel"
             strides=[1, 1, 1, 1],
             pool_strides=[2, 2],  # Because fgrus are every other down-layer
             pool_kernel=[2, 2],
@@ -74,6 +77,10 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
         self.fgru_connectivity = ''
         self.reuse = reuse
         self.timesteps = timesteps
+        self.downsampled = downsampled
+        self.last_timestep = timesteps - 1
+        self.perturb = perturb
+        self.perturb_method = perturb_method
         if train_ff_gate is None:
             self.train_ff_gate = self.train
         else:
@@ -139,7 +146,7 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
         self.scope_reuse = reuse
 
         # Load weights
-        self.data_dict = np.load(vgg16_npy_path, encoding='latin1').item()
+        self.data_dict = np.load(vgg16_npy_path, allow_pickle=True, encoding='latin1').item()
         print("npy file loaded")
 
     def __call__(self, rgb, constructor=None, store_timesteps=False):
@@ -167,13 +174,103 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
             recurrent_ff=self.recurrent_ff,
             init=self.hidden_init,
             dtype=self.dtype)
-        self.fgru_0 = self.conv2_2
+        # self.fgru_0 = tf.get_variable(name="perturb_viz", initializer=self.conv2_2, trainable=True)
+        if self.perturb is not None:
+            # Load weights for deriving tuning curves
+            moments_file = "../undo_bias/neural_models/linear_moments/INSILICO_BSDS_vgg_gratings_simple_tb_feature_matrix.npz"
+            model_file = "../undo_bias/neural_models/linear_models/INSILICO_BSDS_vgg_gratings_simple_tb_model.joblib.npy"
+            moments = np.load(moments_file)
+            means = moments["means"]
+            stds = moments["stds"]
+            clf = np.load(model_file).astype(np.float32)
+            clf_sq = clf.T.dot(clf)
+            inv_clf = np.linalg.pinv(clf_sq).astype(np.float32)  # Precompute inversion
+
+            # Get target units
+            bs, h, w, _ = self.fgru_0.get_shape().as_list()
+            hh, hw = h // 2, w // 2
+            sel_units_raw = self.fgru_0[:, hh - 2: hh + 2, hw - 2: hw + 2, :]
+            sel_units = tf.reshape(sel_units_raw, [bs, -1])  # Squeeze to a matrix
+
+            # Normalize activities
+            sel_units = (sel_units - means) / stds
+
+            # Transform to population tuning curves
+            tc = tf.matmul(tf.matmul(inv_clf, clf, transpose_b=True), sel_units, transpose_b=True)
+
+            # Reweight tuning curves
+            tc = tc * self.perturb
+            # tc = tf.roll(tc, 2, axis=0)
+
+            """
+            # Get gradient of tuning curves wrt target units
+            tc_grad = tf.gradients(tc, sel_units)[0]
+            tc_grad = tf.reshape(tc_grad, sel_units_raw.get_shape().as_list())
+            """
+            # Invert the inverted model
+            # tc_inv = tf.matmul(tf.matmul(inv_clf, clf, transpose_b=True), tc, transpose_a=True)  # Numerical issues
+            inv_inv = np.linalg.pinv(clf.dot(clf.T))
+            tc_inv = tf.matmul(tf.matmul(tf.matmul(tf.matmul(tc, clf.T, transpose_a=True), clf), clf.T), inv_inv) # predictions.T @ clf.T @ clf @ clf.T @ np.linalg.pinv(clf @ clf.T)
+            tc_inv = tf.reshape(tc_inv, [-1])
+
+            # Unnormalize activities
+            tc_inv = tc_inv * stds + means
+
+            # Weight the target units with the gradient
+            perturb_mask = np.ones(self.fgru_0.get_shape().as_list(), dtype=np.float32)
+            perturb_idx = np.zeros(self.fgru_0.get_shape().as_list(), dtype=np.float32)
+            perturb_bias = tf.zeros(self.fgru_0.get_shape().as_list(), dtype=tf.float32)
+            self.center_h = self.fgru_0.get_shape().as_list()[1] // 2
+            self.center_w = self.fgru_0.get_shape().as_list()[2] // 2
+            perturb_mask[:, hh - 2: hh + 2, hw - 2: hw + 2] = 0.
+
+            # BG needs to be ignored via stopgrad
+            bg = tf.cast(tf.greater_equal(tf.reduce_mean(self.fgru_0 ** 2, reduction_indices=[-1], keep_dims=True), 10.), tf.float32)
+            # self.fgru_0 = self.fgru_0 * tf.stop_gradient(bg)
+            if self.perturb < 0:
+                raise RuntimeError("Negative perturbs dont make sense.")
+            else:
+                perturb_idx[:, hh - 2: hh + 2, hw - 2: hw + 2] = 1.
+                perturb_idxs = np.where(perturb_idx.reshape(-1))
+                perturb_bias_shape = perturb_bias.get_shape().as_list()
+                perturb_bias = tf.get_variable(name="perturb_bias", initializer=tf.reshape(perturb_bias, [-1]), dtype=tf.float32, trainable=False)
+                perturb_bias = tf.scatter_update(perturb_bias, perturb_idxs[0], tc_inv)
+                perturb_bias = tf.stop_gradient(tf.reshape(perturb_bias, perturb_bias_shape))  # Fixed perturbation
+            if self.perturb_method == "kernel":
+                ks = 21
+                # Paramaterize the learned hidden state as conv2_2 * kernel
+                self.perturb_mask = tf.get_variable(name="perturb_mask", initializer=perturb_mask, trainable=False)
+                # self.perturb_bias = tf.get_variable(name="perturb_bias", initializer=perturb_bias, trainable=False)
+                # fgru_kernel = tf.get_variable(name="perturb_viz", shape=(ks, ks, 128, 1), initializer=tf.compat.v1.keras.initializers.Orthogonal, trainable=True)
+                fgru_kernel = tf.get_variable(name="perturb_viz", initializer=np.ones((ks, ks, 128, 1), dtype=np.float32) / (ks * ks), trainable=True)
+                # if self.perturb > 1:
+                #     fgru_kernel = fgru_kernel + 1  # Center around 1
+                """
+                fgru_kernel = tf.get_variable(name="perturb_viz", shape=(ks, ks, 1, 1), initializer=tf.compat.v1.keras.initializers.Orthogonal, trainable=True)
+                sf = tf.split(self.fgru_0, self.fgru_0.get_shape().as_list()[-1], axis=-1)
+                of = []
+                for f in sf:
+                    of.append(tf.nn.conv2d(f, fgru_kernel, strides=[1, 1, 1, 1], padding="SAME"))
+                self.fgru_0 = tf.concat(of, -1)
+                """
+                # self.fgru_0 = tf.nn.depthwise_conv2d(tf.stop_gradient(self.conv2_2), fgru_kernel, strides=[1, 1, 1, 1], padding="SAME")
+                pre_kernel = tf.stop_gradient(self.conv2_2) * perturb_mask + perturb_bias
+                self.fgru_0 = tf.nn.depthwise_conv2d(pre_kernel, fgru_kernel, strides=[1, 1, 1, 1], padding="SAME")
+                # self.fgru_0 = self.fgru_0 * self.perturb_mask + self.perturb_bias  # Add the bias back in!
+                # self.fgru_0 = bg * (perturb_bias + (self.fgru_0 * perturb_mask)) + tf.stop_gradient(self.fgru_0 * (1 - bg))
+            elif self.perturb_method == "hidden_state":
+                # self.perturb_mask = tf.get_variable(name="perturb_mask", initializer=perturb_mask, trainable=False)
+                self.fgru_0 = tf.get_variable(name="perturb_viz", initializer=perturb_mask[..., 0][..., None], trainable=True)  # Perturbed fgru
+                self.fgru_0 = bg * (perturb_bias + (self.conv2_2 * self.fgru_0)) + tf.stop_gradient(self.conv2_2 * (1 - bg))  # noqa Set center to perturbed value. Mask out middle value in conv2_2. Take middle value from conv2_2 and add a bias. Place this into conv2_2. 
+
         ta = []
         for idx in range(self.timesteps):
-            self.build(i0=idx)
+            act = self.build(i0=idx)
             self.ff_reuse = tf.AUTO_REUSE
             if store_timesteps:
                 ta += [self.fgru_0]
+        if self.downsampled:
+            return act
         if store_timesteps:
             return ta
 
@@ -185,12 +282,12 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                 h2=self.fgru_0,
                 layer_id=0,
                 i0=i0)
+        self.error_0 = error_horizontal_0
         self.fgru_0 = fgru_activity  # + self.conv2_2
         self.pool2 = self.max_pool(self.fgru_0, 'pool2')
         self.conv3_1 = self.conv_layer(self.pool2, "conv3_1")
         self.conv3_2 = self.conv_layer(self.conv3_1, "conv3_2")
         self.conv3_3 = self.conv_layer(self.conv3_2, "conv3_3")
-
         if i0 == 0:
             self.fgru_1 = self.conv3_3
         with tf.variable_scope('fgru'):
@@ -278,6 +375,8 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                 layer_id=4,
                 i0=i0)
         self.fgru_2 += fgru_activity
+        if i0 == self.last_timestep and self.downsampled:
+            return self.fgru_2
 
         # Resize and conv
         with tf.variable_scope('fgru'):
@@ -380,6 +479,8 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                 h2=fgru_0_td,
                 layer_id=6,
                 i0=i0)
+        # if self.perturb:
+        #     fgru_activity = (fgru_activity * self.perturb_mask) + tf.stop_gradient((1 - self.perturb_mask) + self.perturb_bias)  # noqa Set center to perturbed value
         # self.fgru_0 = fgru_activity
         self.fgru_0 += fgru_activity
 

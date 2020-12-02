@@ -213,7 +213,7 @@ class GNRnOps(object):
             dilations=self.dilations)
         return c2, g2
 
-    def input_integration(self, x, c1, h2, layer_id):
+    def input_integration(self, x, c1, h2, layer_id, perturb_function=None):
         """Integration on the input."""
         mu = getattr(self, 'mu_%s' % layer_id)
         alpha = getattr(self, 'alpha_%s' % layer_id)
@@ -222,11 +222,15 @@ class GNRnOps(object):
 
         # Nonnegative constraint on horiz interactions with x
         inh = (alpha * h2 + mu) * c1
+
+        # Apply perturb function if supplied
+        if perturb_function is not None:
+            inh = h2  # Hack -- let's just bypass this first iteration ^^ perturb_function(inh)
         if self.nonnegative:
             return self.recurrent_nl(
-                self.recurrent_nl(x) - self.recurrent_nl(inh))
+                self.recurrent_nl(x) - self.recurrent_nl(inh)), inh
         else:
-            return self.recurrent_nl(x - inh)
+            return self.recurrent_nl(x - inh), inh
 
     def output_integration(self, h1, c2, g2, h2, layer_id):
         """Integration on the output."""
@@ -251,6 +255,7 @@ class GNRnOps(object):
             ff_drive,
             h2,
             layer_id,
+            perturb_function=None,
             td_gate=None,
             td_cell=None):
         """fGRU body."""
@@ -265,11 +270,12 @@ class GNRnOps(object):
             layer_id=layer_id)
 
         # Calculate input (-) integration: h1 (4)
-        h1 = self.input_integration(
+        h1, s = self.input_integration(
             x=ff_drive,
             c1=c1,
             h2=h2,
-            layer_id=layer_id)
+            layer_id=layer_id,
+            perturb_function=perturb_function)
 
         # Circuit output receives recurrent input h1
         c2, g2 = self.circuit_output(
@@ -290,7 +296,7 @@ class GNRnOps(object):
             eta = getattr(self, 'eta_%s' % layer_id)
             e = tf.gather(eta, i0, axis=-1)
             h2 = h2 * e
-        return h1, h2
+        return s, h2
 
     def fgru_postprocess(
             self,

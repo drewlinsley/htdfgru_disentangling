@@ -971,15 +971,21 @@ class hGRU(object):
         else:
             l2_shape = tf.identity(x_shape)
             self.pooling_factor = 1
+            array_pooling_factor = 1
         x_shape = tf.cast(x_shape, tf.int32)
         l2_shape = tf.cast(l2_shape, tf.int32)
         np_xsh = np.array(x.get_shape().as_list()).astype(float)
         np_xsh[1:3] /= array_pooling_factor
-        np_xsh[-1] = self.hgru_ids[1].values()[0]
-        print '*' * 20
-        print 'fgru embedding shape is: '
-        print np_xsh
-        print '*' * 20
+
+        if len(self.hgru_ids) > 1:
+            np_xsh[-1] = self.hgru_ids[1].values()[0]
+            print '*' * 20
+            print 'fgru embedding shape is: '
+            print np_xsh
+            print '*' * 20
+        else:
+            print '*' * 20
+            print 'Horizontal only: '
 
         # Initialize hidden layer activities
         if self.hidden_init == 'identity':

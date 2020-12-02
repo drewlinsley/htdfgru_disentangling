@@ -121,67 +121,12 @@ def build_model(
             fgru_normalization_type=normalization_type,
             ff_normalization_type=normalization_type)
         vgg(rgb=data_tensor, constructor=gammanet_constructor)
-        # activity = vgg.fgru_0
-
-    with tf.variable_scope('fgru', reuse=reuse):
-        # Get side weights
-        h2_rem = [
-            vgg.fgru_0]
-        h2_rem = [
-            vgg.fgru_0]
-        for idx, h in enumerate(h2_rem):
-            res = normalization.apply_normalization(
-                activity=h,
-                name='output_norm1_%s' % idx,
-                normalization_type=output_normalization_type,
-                data_format=data_format,
-                training=False,
-                trainable=False,
-                reuse=reuse)
-            activity = aux['image_resize'](
-                res,
-                data_tensor.get_shape().as_list()[1:3],
-                align_corners=True)
-
-        # Then read out
-        # activity = normalization.apply_normalization(
-        #     activity=res,
-        #     name='output_norm1',
-        #     normalization_type=output_normalization_type,
-        #     data_format=data_format,
-        #     training=training,
-        #     trainable=training,
-        #     reuse=reuse)
-        activity = tf.layers.conv2d(
-            inputs=activity,
-            filters=gammanet_constructor[0]['features'],
-            kernel_size=(1, 1),
-            padding='same',
-            data_format=long_data_format,
-            name='readout_l0_1',
-            activation=tf.nn.relu,
-            use_bias=True,
-            trainable=training,
-            reuse=reuse)
-        orientations = tf.layers.conv2d(
-            inputs=activity,
-            filters=output_shape,
-            kernel_size=(1, 1),
-            padding='same',
-            data_format=long_data_format,
-            name='readout_l0_2',
-            activation=None,
-            use_bias=True,
-            trainable=training,
-            reuse=reuse)
-        _, h, w, _ = orientations.get_shape().as_list()
-        activity = orientations[:, h // 2, w // 2, :]
-
-    if long_data_format is 'channels_first':
-        activity = tf.transpose(activity, (0, 2, 3, 1))
-    extra_activities = {'orientations': orientations}
+        activity = vgg.fgru_0
     if activity.dtype != tf.float32:
         activity = tf.cast(activity, tf.float32)
     # return [activity, h_deep], extra_activities
+    activity = tf.reduce_mean(activity, reduction_indices=[1, 2, 3])
+    activity = tf.concat((activity, activity), -1)
+    extra_activities = {"fgru": vgg.fgru_0}  # idx: v for idx, v in enumerate(hs_0)}
     return activity, extra_activities
 

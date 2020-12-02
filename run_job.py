@@ -73,6 +73,7 @@ def main(
     #         out_dir=out_dir, reduction=reduction)
     # else:
     #     pass
+    main_config.out_dir = out_dir
     results = model_tools.build_model(
         exp_params=exp_params,
         dt_string=dt_string,

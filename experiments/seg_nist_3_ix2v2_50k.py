@@ -51,7 +51,7 @@ def experiment_params():
     # Augmentations specified in lists of lists
     exp['train_augmentations'] = [[
         'grayscale',
-        'singleton',
+        # 'singleton',
         'res_image_label',
         # 'left_right',
         # 'up_down',
@@ -60,7 +60,7 @@ def experiment_params():
     ]]
     exp['val_augmentations'] = [[
         'grayscale',
-        'singleton',
+        # 'singleton',
         'res_image_label',
         # 'left_right',
         # 'up_down',

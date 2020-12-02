@@ -1192,7 +1192,6 @@ class CreateGNParams(object):
                     return_tensor(
                         shape=layer_shape))
                 self.hidden_dict['fgru_%s' % layer_id] = layer_shape
-
                 print(
                     'Layer %s, %s: %s' % (
                         layer_id,

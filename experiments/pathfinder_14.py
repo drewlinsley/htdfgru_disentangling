@@ -35,6 +35,7 @@ def experiment_params():
     # Model hyperparameters
     exp['lr'] = [1e-3]  # [1e-3, 1e-4, 1e-5, 1e-6]
     exp['loss_function'] = ['bce']
+    exp['val_loss_function'] = ['bce']
     exp['score_function'] = ['accuracy']
     exp['optimizer'] = ['nadam']
     exp['train_batch_size'] = [32]

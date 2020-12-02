@@ -79,6 +79,34 @@ def crop_image_label(image, label, size, crop='random'):
         return image, label
 
 
+def lr_viz_flip(image, label):
+    """Viz-specific image flip."""
+    rand = tf.greater(tf.random_uniform([]), 0.5)
+    image = tf.cond(
+        pred=rand,
+        true_fn=lambda: tf.image.flip_left_right(image),
+        false_fn=lambda: image)
+    label = tf.cond(
+        pred=rand,
+        true_fn=lambda: tf.image.flip_left_right(label),
+        false_fn=lambda: label)
+    return image, label
+
+
+def ud_viz_flip(image, label):
+    """Viz-specific image flip."""
+    rand = tf.greater(tf.random_uniform([]), 0.5)
+    image = tf.cond(
+        pred=rand,
+        true_fn=lambda: tf.image.flip_up_down(image),
+        false_fn=lambda: image)
+    label = tf.cond(
+        pred=rand,
+        true_fn=lambda: tf.image.flip_up_down(label),
+        false_fn=lambda: label)
+    return image, label
+
+
 def lr_flip_image_label(image, label):
     """Apply a crop to both image and label."""
     image_shape = [int(x) for x in image.get_shape()]
@@ -579,6 +607,10 @@ def image_augmentations(
             if aug == 'up_down':
                 image = image_flip(image, direction='up_down')
                 print 'Applying random flip up-down.'
+            if aug == 'lr_viz_flip':
+                assert len(image.get_shape()) == 3, '4D not implemented yet.'
+                image, label = lr_viz_flip(image, label)
+                image, label = ud_viz_flip(image, label)
             if aug == 'lr_flip_image_label':
                 assert len(image.get_shape()) == 3, '4D not implemented yet.'
                 image, label = lr_flip_image_label(image, label)
@@ -696,6 +728,18 @@ def image_augmentations(
             if aug == 'threshold_label':
                 label = tf.cast(tf.greater(label, 0.999), tf.float32)
                 print 'Applying threshold of 0.999 to the label.'
+            if aug == 'threshold_label_255':
+                # cABC label = tf.cast(tf.greater(label, 200), tf.float32)
+                label = tf.cast(tf.greater(label, 10), tf.float32)
+                print 'Applying threshold of 127.5 to the label.'
+            if aug == 'normalize_label':
+                label = tf.cast(label, tf.float32)
+                label = label / tf.reduce_max(label)  # tf.cast(tf.greater(label, 25), tf.float32)
+                print 'Normalizing label to [0, 1].'
+            if aug == 'scale_to_255':
+                image = image * 255.
+            if aug == 'clip_255':
+                image = tf.maximum(tf.minimum(255., image), 0.)
     # else:
     #     assert len(image.get_shape()) == 3, '4D not implemented yet.'
     #     image = tf.image.resize_image_with_crop_or_pad(

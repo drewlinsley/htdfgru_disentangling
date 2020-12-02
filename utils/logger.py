@@ -175,7 +175,7 @@ class Logger(object):
         with open(self.filename, 'a') as f:
           f.write(logstr)
           f.write('\n')
-    except e:
+    except exception as e:
       print('Error occurred!!')
       print(str(e))
     finally:

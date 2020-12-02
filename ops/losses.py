@@ -279,6 +279,32 @@ def derive_loss(labels, logits, loss_type, images=None):
         logits = tf.cast(logits, tf.float32)
         labels = tf.cast(labels, tf.float32)
         return tf.nn.l2_loss(labels - logits)
+    elif loss_type == "dummy":
+        return tf.constant(0)
+    elif loss_type == 'l2_viz_phase':
+        logits = tf.reshape(tf.cast(logits, tf.float32), [-1])
+        labels = tf.reshape(tf.cast(labels, tf.float32), [-1])
+        # diff = tf.reduce_mean(tf.abs(labels - logits))
+        diff = tf.reduce_mean((labels - logits) ** 2)
+        return tf.reduce_mean(diff)
+    elif loss_type == 'l2_viz':
+        # logits = tf.cast(tf.sigmoid(logits), tf.float32)
+        # labels = tf.cast(tf.sigmoid(labels), tf.float32)
+        logits = tf.reshape(tf.cast(logits, tf.float32), [-1])
+        labels = tf.reshape(tf.cast(labels, tf.float32), [-1])
+        # labels = labels + tf.reduce_min(labels)
+        # labels = tf.nn.l2_normalize(labels, -1)
+        # logits = tf.nn.l2_normalize(logits, -1)
+        # diff = tf.compat.v1.losses.cosine_distance(labels=labels, predictions=logits, reduction=tf.compat.v1.losses.Reduction.NONE, axis=-1)
+        diff = tf.nn.l2_loss(labels - logits)
+        # diff = tf.abs(labels - logits)
+        # # Set middle unit loss to 0
+        # mask = np.ones((bs, h, w, 1), dtype=np.float32)
+        # mask[:, h // 2, w // 2] = 0.
+        # return tf.reduce_mean(diff * mask)
+        # return tf.reduce_mean(diff)  # tf.reduce_mean(diff * mask)
+        # return tf.nn.l2_loss(diff)
+        return tf.reduce_mean(diff)
     elif loss_type == 'mse':
         logits = tf.cast(logits, tf.float32)
         labels = tf.cast(labels, tf.float32)
@@ -323,6 +349,8 @@ def derive_loss(labels, logits, loss_type, images=None):
         error = tf.cast(
             tf.not_equal(pred, tf.cast(labels, tf.int32)), tf.float32)
         return tf.reduce_mean(error, name='pixel_error')
+    elif loss_type == 'pass':
+        return 0.
     else:
         raise NotImplementedError(loss_type)
 
@@ -350,6 +378,8 @@ def derive_score(labels, logits, score_type, loss_type):
         logits = tf.cast(logits, tf.float32)
         labels = tf.cast(labels, tf.float32)
         return tf.nn.l2_loss(labels - logits)
+    elif score_type == 'pass':
+        return 0.
     elif score_type == 'mse':
         logits = tf.cast(logits, tf.float32)
         labels = tf.cast(labels, tf.float32)
@@ -459,6 +489,12 @@ def derive_score(labels, logits, score_type, loss_type):
                     targets=labels,
                     k=5),
                 tf.float32))
+    elif score_type == 'fixed_accuracy':
+        fixed_logits = tf.cast(tf.round(tf.sigmoid(logits)), tf.float32)
+        fixed_labels = tf.cast(labels, tf.float32)
+        return tf.reduce_mean(tf.cast(tf.equal(fixed_logits, fixed_labels), tf.float32))
+    elif score_type == "dummy":
+        return tf.constant(0)
     elif score_type == 'accuracy':
         logit_shape = logits.get_shape().as_list()
         label_shape = labels.get_shape().as_list()

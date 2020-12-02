@@ -1,5 +1,8 @@
 """Useful functions for processing images."""
-import cv2
+try:
+    import cv2
+except:
+    print("Failed to import opencv.")
 import numpy as np
 
 

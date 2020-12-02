@@ -17,7 +17,7 @@ class data_processing(object):
         self.config = Config()
         self.im_size = [350, 350]  # 600, 600
         self.model_input_image_size = [160, 160, 1]  # [107, 160, 3]
-        self.max_ims = 50000
+        self.max_ims = 25000
         self.output_size = self.im_size + [2]
         self.label_size = self.output_size
         self.default_loss_function = 'cce'

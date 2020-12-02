@@ -156,7 +156,7 @@ def build_model(
 
     if long_data_format is 'channels_first':
         activity = tf.transpose(activity, (0, 2, 3, 1))
-    extra_activities = {}  # idx: v for idx, v in enumerate(hs_0)}
+    extra_activities = {"fgru": vgg.fgru_0}  # idx: v for idx, v in enumerate(hs_0)}
     if activity.dtype != tf.float32:
         activity = tf.cast(activity, tf.float32)
     # return [activity, h_deep], extra_activities

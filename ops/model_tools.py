@@ -45,6 +45,9 @@ def initialize_tf(
                 len(restore_variables),
                 len(restore_variables) + len(excluded_variables),
                 excluded_variables))
+        non_adam = [x for x in excluded_variables if 'Adam' not in x]
+        print(
+            'Excluded variables w/o adam in their scope: {}'.format(non_adam))
     if not len(restore_variables):
         raise RuntimeError('Something went wrong with variable restore.')
     if hasattr(config, 'exclusion_scope'):
@@ -93,18 +96,26 @@ def initialize_tf(
         var_list=restore_variables)
     summary_op = tf.summary.merge_all()
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
+    # summary_writer = tf.summary.FileWriter(
+    #     directories['summaries'],
+    #     sess.graph)
     sess.run(
         tf.group(
             tf.global_variables_initializer(),
             tf.local_variables_initializer()))
-    summary_writer = tf.summary.FileWriter(
-        directories['summaries'],
-        sess.graph)
     if not placeholders:
+        # sess.run(
+        #     tf.group(
+        #         tf.global_variables_initializer(),
+        #         tf.local_variables_initializer()))
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
     else:
+        # sess.run(tf.initialize_all_variables())
         coord, threads = None, None
+    summary_writer = tf.summary.FileWriter(
+        directories['summaries'],
+        sess.graph)
     return (
         sess,
         saver,
@@ -373,8 +384,11 @@ def build_model(
         assert len(gpu_device) == 1, 'Testing only works with 1 gpu.'
         gpu_device = gpu_device[0]
         with tf.device(gpu_device):
-            test_images = val_images
-            test_labels = val_labels
+            try:
+                test_images = val_images
+                test_labels = val_labels
+            except:
+                print("Failed at line 380. Figure this out eventually.")
             test_dataset_module = val_dataset_module
             test_logits, test_vars = model_spec.build_model(
                 data_tensor=test_images,
@@ -493,43 +507,90 @@ def build_model(
                             (
                                 val_image_batch,
                                 val_label_batch) = val_batch_queue.dequeue()
-                        train_image_list += [train_image_batch]
-                        train_label_list += [train_label_batch]
-                        val_image_list += [val_image_batch]
-                        val_label_list += [val_label_batch]
 
                         # Build models
-                        train_logits, train_vars = model_spec.build_model(
-                            data_tensor=train_image_batch,
-                            reuse=train_reuse,
-                            training=True,
-                            output_shape=train_dataset_module.output_size)
-                        num_training_vars = len(tf.trainable_variables())
-                        val_logits, val_vars = model_spec.build_model(
-                            data_tensor=val_image_batch,
-                            reuse=True,
-                            training=False,
-                            output_shape=val_dataset_module.output_size)
+                        if hasattr(config, "stack_label_image") and config.stack_label_image:
+                            label_shape = train_label_batch.get_shape().as_list()[-1]
+                            # tltb = train_label_batch[:, :label_shape // 2]
+                            # tllb = train_label_batch[:, label_shape // 2:]
+                            tltb = train_label_batch[:, :2048]
+                            tllb = train_label_batch[:, 2048:]
+                            train_logits, train_vars = model_spec.build_model(
+                                data_tensor=train_image_batch,
+                                labels=tltb,
+                                # labels=tllb,
+                                reuse=train_reuse,
+                                training=True,
+                                output_shape=train_dataset_module.output_size)
+                            # train_label_batch = tllb
+                            num_training_vars = len(tf.trainable_variables())
+                            # vltb = val_label_batch[:, :label_shape // 2]
+                            # vllb = val_label_batch[:, label_shape // 2:]
+                            vltb = val_label_batch[:, :2048]
+                            vllb = val_label_batch[:, 2048:]
+                            val_logits, val_vars = model_spec.build_model(
+                                data_tensor=val_image_batch,
+                                labels=vltb,
+                                # labels=vllb,
+                                reuse=True,
+                                training=False,
+                                output_shape=val_dataset_module.output_size)
+                            # val_label_batch = vllb
+
+                            # Derive losses
+                            if train_logits.dtype is not tf.float32:
+                                train_logits = tf.cast(train_logits, tf.float32)
+                            if val_logits.dtype is not tf.float32:
+                                val_logits = tf.cast(val_logits, tf.float32)
+                            train_loss = losses.derive_loss(
+                                labels=tllb,  # tllb,  # train_label_batch,
+                                logits=train_logits,
+                                images=train_image_batch,
+                                loss_type=train_loss_function)
+                            val_loss = losses.derive_loss(
+                                labels=vllb,  # vllb,  # val_label_batch,
+                                logits=val_logits,
+                                images=val_image_batch,
+                                loss_type=val_loss_function)
+                        else:
+                            train_logits, train_vars = model_spec.build_model(
+                                data_tensor=train_image_batch,
+                                reuse=train_reuse,
+                                training=True,
+                                output_shape=train_dataset_module.output_size)
+                            num_training_vars = len(tf.trainable_variables())
+                            val_logits, val_vars = model_spec.build_model(
+                                data_tensor=val_image_batch,
+                                reuse=True,
+                                training=False,
+                                output_shape=val_dataset_module.output_size)
+                            # Derive losses
+                            if train_logits.dtype is not tf.float32:
+                                train_logits = tf.cast(train_logits, tf.float32)
+                            if val_logits.dtype is not tf.float32:
+                                val_logits = tf.cast(val_logits, tf.float32)
+                            train_loss = losses.derive_loss(
+                                labels=train_label_batch,
+                                logits=train_logits,
+                                images=train_image_batch,
+                                loss_type=train_loss_function)
+                            val_loss = losses.derive_loss(
+                                labels=val_label_batch,
+                                logits=val_logits,
+                                images=val_image_batch,
+                                loss_type=val_loss_function)
+                        train_image_list += [train_image_batch]
+                        val_image_list += [val_image_batch]
+                        train_label_list += [train_label_batch]
+                        val_label_list += [val_label_batch]
+
+                        if hasattr(config, "stack_label_image") and config.stack_label_image:
+                            train_image_batch = train_image_batch[0]
+                            val_image_batch = val_image_batch[0]
                         num_validation_vars = len(tf.trainable_variables())
                         assert num_training_vars == num_validation_vars, \
                             'Found a different # of train and val variables.'
                         train_reuse = True
-
-                        # Derive losses
-                        if train_logits.dtype is not tf.float32:
-                            train_logits = tf.cast(train_logits, tf.float32)
-                        if val_logits.dtype is not tf.float32:
-                            val_logits = tf.cast(val_logits, tf.float32)
-                        train_loss = losses.derive_loss(
-                            labels=train_label_batch,
-                            logits=train_logits,
-                            images=train_image_batch,
-                            loss_type=train_loss_function)
-                        val_loss = losses.derive_loss(
-                            labels=val_label_batch,
-                            logits=val_logits,
-                            images=val_image_batch,
-                            loss_type=val_loss_function)
 
                         # Derive score
                         train_score = losses.derive_score(

@@ -49,12 +49,22 @@ def apply_normalization(
                 center=center,
                 scope=scope,
                 training=training)
+        elif normalization_type is 'group':
+            return group(
+                reuse=reuse,
+                bottom=activity,
+                data_format=data_format,
+                scale=False,
+                center=False,
+                scope=scope,
+                training=training)
         elif normalization_type is 'no_param_batch_norm':
             return batch_contrib(
                 reuse=reuse,
                 bottom=activity,
                 renorm=False,
                 name=name,
+                momentum=0.95,
                 dtype=activity.dtype,
                 data_format=data_format,
                 trainable=trainable,
@@ -197,9 +207,9 @@ def batch(
         center=center,
         momentum=momentum,
         beta_initializer=tf.zeros_initializer(dtype=dtype),
-        gamma_initializer=tf.ones_initializer(dtype=dtype),
+        gamma_initializer=tf.constant_initializer(1., dtype=dtype),
         moving_mean_initializer=tf.zeros_initializer(dtype=dtype),
-        moving_variance_initializer=tf.ones_initializer(dtype=dtype),
+        moving_variance_initializer=tf.constant_initializer(1., dtype=dtype),
         fused=fused,
         renorm=renorm,
         reuse=reuse,
@@ -237,6 +247,41 @@ def instance(
         reuse=reuse,
         scope=scope,
         data_format=data_format,
+        trainable=training)
+
+
+def group(
+        bottom,
+        scale=True,
+        center=True,
+        data_format='NHWC',
+        dtype=tf.float32,
+        reuse=False,
+        scope=None,
+        training=True):
+    """Wrapper for layers batchnorm."""
+    if data_format is not 'NHWC' or data_format is not 'channels_last':
+        pass
+    elif data_format is not 'NCHW' or data_format is not 'channels_first':
+        pass
+    else:
+        raise NotImplementedError(data_format)
+    # param_initializer = {
+    #     'moving_mean': tf.constant_initializer(0., dtype=dtype),
+    #     'moving_variance': tf.constant_initializer(1., dtype=dtype),
+    #     'gamma': tf.constant_initializer(0.1, dtype=dtype)
+    # }
+    groups = 32
+    if int(bottom.get_shape()[-1]) < groups:
+        groups = int(bottom.get_shape()[-1])
+    return tf.contrib.layers.group_norm(
+        inputs=bottom,
+        scale=scale,
+        center=center,
+        groups=groups,
+        # param_initializers=param_initializer,
+        reuse=reuse,
+        scope=scope,
         trainable=training)
 
 

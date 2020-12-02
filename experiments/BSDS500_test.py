@@ -20,7 +20,7 @@ def experiment_params():
         # 'fgru_bsds'
     ]
 
-    exp['validation_period'] = [100]
+    exp['validation_period'] = [1000]
     exp['validation_steps'] = [200 / 8]
     exp['shuffle_val'] = [False]  # Shuffle val data.
     exp['shuffle_train'] = [True]

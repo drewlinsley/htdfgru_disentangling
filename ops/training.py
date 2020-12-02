@@ -9,11 +9,17 @@ from utils import py_utils
 from ops import data_to_tfrecords
 from ops import tf_fun
 from tqdm import tqdm
+from utils import py_utils
 try:
     from db import db
 except Exception as e:
     print('Failed to import db in ops/training.py: %s' % e)
 # from memory_profiler import profile
+
+
+def sigmoid(x):
+    """Per-element sigmoid in numpy."""
+    return 1 / (1 + np.exp(-x))
 
 
 def val_status(
@@ -91,11 +97,20 @@ def training_step(
     else:
         it_train_dict = sess.run(train_dict)
     train_score = it_train_dict['train_score']
+    # from matplotlib import pyplot as plt
+    # plt.plot(it_train_dict['train_labels'].reshape(-1), label="GT")
+    # plt.plot(it_train_dict['train_logits'].reshape(-1), label="optimized")
+    # plt.legend()
+    # plt.show()
     # Patch for accuracy... TODO: Fix the TF op
     if config.score_function == 'accuracy':
         preds = np.argsort(it_train_dict['train_logits'], -1)[:, -1]
         train_score = np.mean(
             preds == it_train_dict['train_labels'].astype(float))
+    elif config.score_function == 'fixed_accuracy':
+         train_labels = it_train_dict['train_labels'].astype(float)
+         train_logits = np.round(sigmoid(it_train_dict['train_logits'])).astype(float)
+         train_score = np.mean(train_labels == train_logits)
 
     train_loss = it_train_dict['train_loss']
     duration = time.time() - start_time
@@ -127,22 +142,25 @@ def validation_step(
     start_time = time.time()
     save_val_dicts = (hasattr(config, 'get_map') and config.get_map) or \
         (hasattr(config, 'all_results') and config.all_results)
+    # map_log_key="fgru"  # Hack to get activities for viz.
     if save_val_dicts:
         it_val_dicts = []
     for idx in range(config.validation_steps):
         # Validation accuracy as the average of n batches
         file_paths = ''  # Init empty full path image info for tfrecords
         if val_batch_idx is not None:
-            if not sequential:
+            if not sequential and len(val_batch_idx) > 1:
                 it_val_batch_idx = val_batch_idx[
                     np.random.permutation(len(val_batch_idx))]
                 val_step = np.random.randint(low=0, high=val_batch_idx.max())
             else:
                 it_val_batch_idx = val_batch_idx
                 val_step = idx
-            it_idx = it_val_batch_idx == val_step
-            it_ims = val_images[it_idx]
-            it_labs = val_labels[it_idx]
+            if val_images.shape > 1:
+                it_idx = it_val_batch_idx == val_step
+                it_ims = val_images[it_idx]
+                it_labs = val_labels[it_idx]
+            # Correct for batch-size=1 cases
             if isinstance(it_ims[0], basestring):
                 file_paths = np.copy(it_ims)
                 it_ims = np.asarray(
@@ -178,6 +196,10 @@ def validation_step(
         #     preds = np.argsort(it_val_dict['val_logits'], -1)[:, -1]
         #     it_val_score = np.mean(
         #         preds == it_val_dict['val_labels'].astype(float))
+        if config.score_function == 'fixed_accuracy':
+            it_val_labels = it_val_dict[map_lab_key].astype(float)
+            it_val_logits = np.round(sigmoid(it_val_dict[map_log_key])).astype(float)
+            it_val_score = np.mean(it_val_labels == it_val_logits)
         it_val_score = np.append(
             it_val_score,
             it_val_dict[eval_score_key])
@@ -339,10 +361,14 @@ def test_loop(
                 np.array(tf_label_shape)[1:3] == np_label_shape[1:3]):
             pass
         else:
-            raise RuntimeError(
-                'Mismatch label shape np: %s vs. tf: %s' % (
+            # raise RuntimeError(
+            #     'Mismatch label shape np: %s vs. tf: %s' % (
+            #         np_label_shape,
+            #         tf_label_shape))
+            print('Mismatch label shape np: %s vs. tf: %s' % (
                     np_label_shape,
                     tf_label_shape))
+
 
         # Loop through all the images
         if num_batches is not None:
@@ -361,7 +387,8 @@ def test_loop(
             eval_loss_key='test_loss',
             map_im_key='test_proc_images',
             map_log_key='test_logits',
-            map_lab_key='test_proc_labels',
+            # map_lab_key='test_proc_labels',
+            map_lab_key='test_labels',
             val_images=test_images,
             val_labels=test_labels,
             val_batch_idx=test_batch_idx,
@@ -398,9 +425,11 @@ def test_loop(
             dict_label_key='test_labels',
             eval_score_key='test_score',
             eval_loss_key='test_loss',
-            map_im_key='test_proc_images',
+            # map_im_key='test_proc_images',
+            map_im_key='test_images',
             map_log_key='test_logits',
-            map_lab_key='test_proc_labels')
+            # map_lab_key='test_proc_labels')
+            map_lab_key='test_labels')
         return {
             'scores': test_score,
             'losses': test_lo,
@@ -455,6 +484,11 @@ def training_loop(
         it_early_stop = config.early_stop
     else:
         it_early_stop = np.inf
+
+    if hasattr(config, "adaptive_train"):
+        adaptive_train = config.adaptive_train
+    else:
+        adaptive_train = False
     if placeholders:
         train_images = placeholders['train']['images']
         val_images = placeholders['val']['images']
@@ -488,11 +522,14 @@ def training_loop(
                     tf_label_shape))
 
         # Start training
+        train_losses = []
+        train_logits = []
         for epoch in tqdm(
                 range(config.epochs),
                 desc='Epoch',
                 total=config.epochs):
             for train_batch in range(train_batches):
+                io_start_time = time.time()
                 data_idx = train_batch_idx == train_batch
                 it_train_images = train_images[data_idx]
                 it_train_labels = train_labels[data_idx]
@@ -512,7 +549,9 @@ def training_loop(
                     timer) = training_step(
                     sess=sess,
                     train_dict=train_dict,
+                    config=config,
                     feed_dict=feed_dict)
+                train_losses.append(train_loss)
                 if step % config.validation_period == 0:
                     val_score, val_lo, it_val_dict, duration = validation_step(
                         sess=sess,
@@ -563,6 +602,30 @@ def training_loop(
                     except Exception as e:
                         log.info('Failed to save checkpoint: %s' % e)
 
+                    # Hack to get the visulations... clean this up later
+                    if "BSDS500_test_orientation_viz" in config.experiment:  # .model == "BSDS_inh_perturb" or config.model == "BSDS_exc_perturb":
+                        train_logits.append([it_train_dict["train_logits"].ravel()])
+                        out_dir = "circuits_{}".format(config.out_dir)
+                        py_utils.make_dir(out_dir)
+                        out_target = os.path.join(out_dir, "{}_{}".format(config.model, config.train_dataset))
+                        np.save("{}_optim".format(out_target), [sess.run(tf.trainable_variables())])  # , it_train_dict["conv"]])
+                        np.save("{}_perf".format(out_target), train_losses)
+                        np.save("{}_curves".format(out_target), train_logits)
+                        np.save("{}_label".format(out_target), it_train_dict["train_labels"])
+                    """
+                    if config.model == "BSDS_inh_perturb":
+                        np.save("inh_perturbs/optim", sess.run(tf.trainable_variables()[0]))
+                        np.save("inh_perturbs/perf", train_losses)
+                        np.save("inh_perturbs/curves", train_logits)
+                        np.save("inh_perturbs/label", it_train_dict["train_labels"])
+
+                    if config.model == "BSDS_exc_perturb":
+                        np.save("exc_perturbs/optim", sess.run(tf.trainable_variables()[0]))
+                        np.save("exc_perturbs/perf", train_losses)
+                        np.save("exc_perturbs/curves", train_logits)
+                        np.save("exc_perturbs/label", it_train_dict["train_labels"])
+                    """
+
                     # Training status and validation accuracy
                     val_status(
                         log=log,
@@ -579,6 +642,7 @@ def training_loop(
                         summary_dir=directories['summaries'])
                 else:
                     # Training status
+                    io_duration = time.time() - io_start_time
                     train_status(
                         log=log,
                         dt=datetime.now(),
@@ -586,6 +650,7 @@ def training_loop(
                         train_loss=train_loss,
                         rate=config.val_batch_size / duration,
                         timer=float(duration),
+                        io_timer=float(io_duration),
                         lr=it_train_dict['lr'],
                         score_function=config.score_function,
                         train_score=train_score)
@@ -593,6 +658,13 @@ def training_loop(
                 # End iteration
                 val_perf = np.concatenate([val_perf, [val_lo]])
                 step += 1
+                
+                # Adaptive ending
+                if adaptive_train and train_loss <= adaptive_train:
+                    break
+            if adaptive_train and train_loss <= adaptive_train:
+                break
+
 
     else:
         try:

@@ -180,7 +180,7 @@ def return_optimizer(optimizer, lr, dtype):
         optim = lambda x: tf.train.AdamOptimizer(
             x, epsilon=eps)
     elif optimizer == 'adam_keras':
-        raise NotImplementedError
+        # raise NotImplementedError
         optim = lambda x: tf.keras.optimizers.Adam(
             x, amsgrad=True, epsilon=eps)
     elif optimizer == 'adam_w':
@@ -189,6 +189,9 @@ def return_optimizer(optimizer, lr, dtype):
     elif optimizer == 'adam_eps':
         optim = lambda x: tf.train.AdamOptimizer(
             x, epsilon=0.1)
+    elif optimizer == 'adam_beta':
+        optim = lambda x: tf.contrib.opt.NadamOptimizer(
+            x, beta1=0.9, beta2=0.5)
     elif optimizer == 'nadam':
         optim = lambda x: tf.contrib.opt.NadamOptimizer(
             x, epsilon=eps)
@@ -261,9 +264,10 @@ def check_grads(gvs):
     null_grads = [x for x in gvs if x[0] is None]
     if len(null_grads):
         null_names = [x[1].name for x in null_grads]
-        raise RuntimeError(
-            'The following vars are not in the backprop graph: %s' %
-            null_names)
+        print("WARNING not stopping because vars are out of BP graph: {}".format(null_names))
+        # raise RuntimeError(
+        #     'The following vars are not in the backprop graph: %s' %
+        #     null_names)
 
 
 def apply_grad_clip(grads, clip_gradients):
