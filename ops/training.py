@@ -604,6 +604,11 @@ def training_loop(
 
                     # Hack to get the visulations... clean this up later
                     if "BSDS500_test_orientation_viz" in config.experiment:  # .model == "BSDS_inh_perturb" or config.model == "BSDS_exc_perturb":
+                        # from matplotlib import pyplot as plt;plt.plot(it_train_dict['train_logits'].squeeze(), "r", label="Perturb");plt.plot(it_train_dict['train_labels'].squeeze()[-6:], 'b', label="GT");plt.legend();plt.show()
+                        # from matplotlib import pyplot as plt;plt.imshow((it_train_dict['impatch'].squeeze() + np.asarray([123.68, 116.78, 103.94])[None, None]).astype(np.uint8));plt.show()
+                        # from matplotlib import pyplot as plt;dd = it_train_dict["grad0"];plt.imshow(np.abs(dd.squeeze()).mean(-1) / (np.abs(dd.squeeze()).std(-1) + 1e-4));plt.show()
+                        # from matplotlib import pyplot as plt;dd = it_train_dict['mask'];plt.imshow(dd.squeeze().mean(-1));plt.show()
+                        print("Penalty: {}".format(it_train_dict["penalty"].sum()))
                         train_logits.append([it_train_dict["train_logits"].ravel()])
                         out_dir = "circuits_{}".format(config.out_dir)
                         py_utils.make_dir(out_dir)

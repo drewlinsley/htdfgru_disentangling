@@ -89,7 +89,7 @@ def main(path, channel=0):
         con = con.squeeze().mean(-1)
         minmax = max(np.abs(con[40:45, 40:45].min()), con[40:45, 40:45].max())
         minmax = minmax + minmax * 2
-        ax.imshow(con, cmap="RdBu", vmin=minmax * np.sign(con.min()), vmax=minmax)
+        ax.imshow(con, cmap="RdBu_r", vmin=minmax * np.sign(con.min()), vmax=minmax)
         ax.set_xticks([])
         ax.set_yticks([])
         theta = bins[idx]
@@ -144,10 +144,12 @@ def main(path, channel=0):
         minmax = minmax + minmax * 1
     # minmax = max(np.abs(rc.min()), rc.max())
     plt.imshow(rc, cmap="RdBu_r", vmin=minmax * np.sign(con.min()), vmax=minmax)
+    plt.colorbar()
     plt.axis("off")
     plt.savefig(os.path.join(results_dir, "mean_connectome.pdf"))
     plt.show()
     plt.close(f)
+
 
 if __name__ == '__main__':
     parser = ArgumentParser()

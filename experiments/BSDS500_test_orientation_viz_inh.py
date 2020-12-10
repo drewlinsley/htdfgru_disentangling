@@ -30,20 +30,21 @@ def experiment_params():
     exp['save_gradients'] = [False]
 
     # Model hyperparameters
-    exp['lr'] = [1]  # [10000]  # [100]
+    exp['lr'] = [1000]  # [10000]  # [100]
+    # exp['lr'] = [10000]  # [10000]  # [100]
     # exp['lr'] = [10]  # [100]
     exp['stack_label_image'] = True
     # exp['exclusion_lr'] = 1e-4
-    exp['train_loss_function'] = ['l2_viz_phase']  # ['hed_bce']  # ['pearson']  # ['hed_bce']  # ['bsds_bce']
-    exp['val_loss_function'] = ['l2_viz_phase']  # ['hed_bce']  # ['pearson']  # ['hed_bce']  # ['bsds_bce']  # ['bsds_bce']
+    exp['train_loss_function'] = ['l2_viz']  # ['hed_bce']  # ['pearson']  # ['hed_bce']  # ['bsds_bce']
+    exp['val_loss_function'] = ['l2_viz']  # ['hed_bce']  # ['pearson']  # ['hed_bce']  # ['bsds_bce']  # ['bsds_bce']
     exp['score_function'] = ['pass']  # ['bsds_f1']
-    exp['optimizer'] = ['adam']
+    exp['optimizer'] = ['nadam']  # momentum']
     exp['early_stop'] = 1000000
     # exp['clip_gradients'] = 7
     exp['train_batch_size'] = [1]  # 10]
     exp['val_batch_size'] = [1]  # 10]
     exp['test_batch_size'] = [1]  # 10]
-    exp['epochs'] = [751 * 4]  # 40000
+    exp['epochs'] = [751 * 2]  # 40000
     exp['all_results'] = True
     # exp['plot_recurrence'] = True
 

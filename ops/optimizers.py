@@ -191,7 +191,12 @@ def return_optimizer(optimizer, lr, dtype):
             x, epsilon=0.1)
     elif optimizer == 'adam_beta':
         optim = lambda x: tf.contrib.opt.NadamOptimizer(
-            x, beta1=0.9, beta2=0.5)
+            x, beta1=0.2, beta2=0.999)
+    elif optimizer == 'lbfgs':
+        optim = lambda x: tf.contrib.opt.ScipyOptimizerInterface(
+            x,
+            method='L-BFGS-B',
+            options={'maxiter': 100000})
     elif optimizer == 'nadam':
         optim = lambda x: tf.contrib.opt.NadamOptimizer(
             x, epsilon=eps)

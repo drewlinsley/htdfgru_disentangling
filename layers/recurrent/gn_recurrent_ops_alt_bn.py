@@ -225,7 +225,7 @@ class GNRnOps(object):
 
         # Apply perturb function if supplied
         if perturb_function is not None:
-            inh = h2  # Hack -- let's just bypass this first iteration ^^ perturb_function(inh)
+            inh = h2  #  * mask  # Hack -- let's just bypass this first iteration ^^ perturb_function(inh)
         if self.nonnegative:
             return self.recurrent_nl(
                 self.recurrent_nl(x) - self.recurrent_nl(inh)), inh

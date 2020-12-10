@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 
-def derive_loss(labels, logits, loss_type, images=None):
+def derive_loss(labels, logits, loss_type, images=None, penalty=None):
     """Derive loss_type between labels and logits."""
     assert loss_type is not None, 'No loss_type declared'
     if loss_type == 'sparse_ce':  # or loss_type == 'cce':
@@ -296,15 +296,20 @@ def derive_loss(labels, logits, loss_type, images=None):
         # labels = tf.nn.l2_normalize(labels, -1)
         # logits = tf.nn.l2_normalize(logits, -1)
         # diff = tf.compat.v1.losses.cosine_distance(labels=labels, predictions=logits, reduction=tf.compat.v1.losses.Reduction.NONE, axis=-1)
-        diff = tf.nn.l2_loss(labels - logits)
-        # diff = tf.abs(labels - logits)
+        # diff = tf.nn.l2_loss(labels - logits)
+        # diff = tf.nn.l2_loss(labels - logits)
+        diff = tf.sqrt(tf.reduce_mean((labels - logits) ** 2))
         # # Set middle unit loss to 0
         # mask = np.ones((bs, h, w, 1), dtype=np.float32)
         # mask[:, h // 2, w // 2] = 0.
         # return tf.reduce_mean(diff * mask)
         # return tf.reduce_mean(diff)  # tf.reduce_mean(diff * mask)
         # return tf.nn.l2_loss(diff)
-        return tf.reduce_mean(diff)
+        ls = tf.reduce_mean(diff)
+        if penalty is not None:
+            return ls + tf.reduce_mean(penalty)
+        else:
+            return ls
     elif loss_type == 'mse':
         logits = tf.cast(logits, tf.float32)
         labels = tf.cast(labels, tf.float32)

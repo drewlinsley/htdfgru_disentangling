@@ -542,11 +542,19 @@ def build_model(
                                 train_logits = tf.cast(train_logits, tf.float32)
                             if val_logits.dtype is not tf.float32:
                                 val_logits = tf.cast(val_logits, tf.float32)
-                            train_loss = losses.derive_loss(
-                                labels=tllb,  # tllb,  # train_label_batch,
-                                logits=train_logits,
-                                images=train_image_batch,
-                                loss_type=train_loss_function)
+                            if "penalty" in train_vars:  # hasattr(train_vars, "penalty"):
+                                train_loss = losses.derive_loss(
+                                    labels=tllb,  # tllb,  # train_label_batch,
+                                    logits=train_logits,
+                                    images=train_image_batch,
+                                    penalty=train_vars["penalty"],
+                                    loss_type=train_loss_function)
+                            else:
+                                train_loss = losses.derive_loss(
+                                    labels=tllb,  # tllb,  # train_label_batch,
+                                    logits=train_logits,
+                                    images=train_image_batch,
+                                    loss_type=train_loss_function)
                             val_loss = losses.derive_loss(
                                 labels=vllb,  # vllb,  # val_label_batch,
                                 logits=val_logits,

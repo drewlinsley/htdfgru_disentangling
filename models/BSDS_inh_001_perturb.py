@@ -182,7 +182,7 @@ def build_model(
     # bg = tf.cast(tf.greater(bg, tf.reduce_mean(bg)), tf.float32)
     # bg_dil = dilation2d(img=bg, extent=5)
     # extra_activities = {"mask": bg, "mask_dil": bg_dil}  # {"mask": tf.reduce_mean(vgg.conv2_2 ** 2, reduction_indices=[-1])}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
-    extra_activities = {"fgru": vgg.fgru_0, "conv": vgg.error_1}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
+    extra_activities = {"fgru": vgg.fgru_0, "penalty": tf.constant(0.), "conv": vgg.error_1}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
     if activity.dtype != tf.float32:
         activity = tf.cast(activity, tf.float32)
     # return [activity, h_deep], extra_activities
