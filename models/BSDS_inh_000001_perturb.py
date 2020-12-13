@@ -139,7 +139,7 @@ def build_model(
             timesteps=8,
             # perturb=0.0001,  # 2.,  # 1.001,  # 17.1,
             # perturb=1.0000001,  # 2.,  # 1.001,  # 17.1,
-            perturb=0.00001,  # 2.,  # 1.001,  # 17.1,
+            perturb=1.01,  # 2.,  # 1.001,  # 17.1,
             perturb_norm=perturb_norm,
             # perturb=1.5,  # 2.,  # 1.001,  # 17.1,
             # perturb=2.,  # 2.,  # 1.001,  # 17.1,

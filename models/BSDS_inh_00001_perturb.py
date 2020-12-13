@@ -127,14 +127,16 @@ def build_model(
         aux = get_aux()
         # moments_file = "../undo_bias/neural_models/linear_moments/INSILICO_BSDS_vgg_gratings_simple_tb_feature_matrix.npz"
         # model_file = "../undo_bias/neural_models/linear_models/INSILICO_BSDS_vgg_gratings_simple_tb_model.joblib.npy"
-        moments_file = "../undo_bias/neural_models/linear_moments/tb_feature_matrix.npz"
-        model_file = "../undo_bias/neural_models/linear_models/tb_model.joblib.npy"
+        fb_moments_file = "../undo_bias/neural_models/linear_moments/tb_feature_matrix.npz"
+        fb_model_file = "../undo_bias/neural_models/linear_models/tb_model.joblib.npy"
+        ff_moments_file = "../undo_bias/neural_models/linear_moments/conv2_2_tb_feature_matrix.npz"
+        ff_model_file = "../undo_bias/neural_models/linear_models/conv2_2_tb_model.joblib"
         vgg = vgg16.Vgg16(
             vgg16_npy_path='/media/data_cifs_lrs/clicktionary/pretrained_weights/vgg16.npy',
             reuse=reuse,
             aux=aux,
-            moments_file=moments_file,
-            model_file=model_file,
+            moments_file=ff_moments_file,  # Perturb FF drive
+            model_file=ff_model_file,
             train=False,
             timesteps=8,
             # perturb=0.0001,  # 2.,  # 1.001,  # 17.1,
@@ -156,11 +158,11 @@ def build_model(
         vgg(rgb=data_tensor, label=labels, constructor=gammanet_constructor)
         activity = vgg.fgru_0
 
-        # Load tuning curve transform
-        moments = np.load(moments_file)
+        # Load tuning curve transform for fb output
+        moments = np.load(fb_moments_file)
         means = moments["means"]
         stds = moments["stds"]
-        clf = np.load(model_file).astype(np.float32)
+        clf = np.load(fb_model_file).astype(np.float32)
 
         # Transform activity to outputs
         bs, h, w, _ = vgg.fgru_0.get_shape().as_list()

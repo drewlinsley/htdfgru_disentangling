@@ -225,17 +225,14 @@ class GNRnOps(object):
 
         # Apply perturb function if supplied
         if perturb_function is not None:
-            if not self.nonnegative:
-                inh = tf.nn.relu(self.mult) + inh  # self.recurrent_nl(inh)  #  + inh  #  * mask  # Hack -- let's just bypass this first iteration ^^ perturb_function(inh)
-            else:
-                inh = tf.nn.relu(self.mult) + tf.nn.relu(inh)
+            inh = h2  #  * mask  # Hack -- let's just bypass this first iteration ^^ perturb_function(inh)
         if self.nonnegative:
             return self.recurrent_nl(
                 self.recurrent_nl(x) - self.recurrent_nl(inh)), inh
         else:
             return self.recurrent_nl(x - inh), inh
 
-    def output_integration(self, h1, c2, g2, h2, layer_id, perturb_function=None):
+    def output_integration(self, h1, c2, g2, h2, layer_id):
         """Integration on the output."""
         if self.multiplicative_excitation:
             # + and * interactions
@@ -246,12 +243,8 @@ class GNRnOps(object):
             # h2_hat = self.recurrent_nl((kappa * h1 + omega) * c2 + h1)
             a = kappa * (h1 + c2)
             m = omega * (h1 * c2)
-            if perturb_function is not None:
-                h2_hat = self.recurrent_nl(a + m) + tf.nn.relu(-self.mult)
-            else:
-                h2_hat = self.recurrent_nl(a + m)
+            h2_hat = self.recurrent_nl(a + m)
         else:
-            raise NotImplementedError
             # + interactions
             h2_hat = self.recurrent_nl(h1 + c2)
         return (1 - g2) * h2 + g2 * h2_hat
@@ -296,8 +289,7 @@ class GNRnOps(object):
             c2=c2,
             g2=g2,
             h2=h2,
-            layer_id=layer_id,
-            perturb_function=perturb_function)
+            layer_id=layer_id)
 
         # Normalize if requested
         if self.adaptation is 'eta':

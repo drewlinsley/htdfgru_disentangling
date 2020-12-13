@@ -30,7 +30,7 @@ def experiment_params():
     exp['save_gradients'] = [False]
 
     # Model hyperparameters
-    exp['lr'] = [1000]  # [10000]  # [100]
+    exp['lr'] = [1.]  # [10000]  # [100]
     # exp['lr'] = [10000]  # [10000]  # [100]
     # exp['lr'] = [10]  # [100]
     exp['stack_label_image'] = True
@@ -44,7 +44,7 @@ def experiment_params():
     exp['train_batch_size'] = [1]  # 10]
     exp['val_batch_size'] = [1]  # 10]
     exp['test_batch_size'] = [1]  # 10]
-    exp['epochs'] = [751 * 2]  # 40000
+    exp['epochs'] = [751 * 1]  # 40000
     exp['all_results'] = True
     # exp['plot_recurrence'] = True
 

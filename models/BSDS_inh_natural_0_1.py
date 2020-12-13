@@ -124,9 +124,8 @@ def build_model(
 
     # Build model
     with tf.variable_scope('vgg', reuse=reuse):
+        hh, hw = 66, 84
         aux = get_aux()
-        # moments_file = "../undo_bias/neural_models/linear_moments/INSILICO_BSDS_vgg_gratings_simple_tb_feature_matrix.npz"
-        # model_file = "../undo_bias/neural_models/linear_models/INSILICO_BSDS_vgg_gratings_simple_tb_model.joblib.npy"
         fb_moments_file = "../undo_bias/neural_models/linear_moments/tb_feature_matrix.npz"
         fb_model_file = "../undo_bias/neural_models/linear_models/tb_model.joblib.npy"
         ff_moments_file = "../undo_bias/neural_models/linear_moments/conv2_2_tb_feature_matrix.npz"
@@ -135,13 +134,13 @@ def build_model(
             vgg16_npy_path='/media/data_cifs_lrs/clicktionary/pretrained_weights/vgg16.npy',
             reuse=reuse,
             aux=aux,
-            moments_file=ff_moments_file,  # Perturb FF drive
+            hh=hh,
+            hw=hw,
+            moments_file=ff_moments_file,
             model_file=ff_model_file,
             train=False,
             timesteps=8,
-            perturb=1.2,  # 2.,  # 1.001,  # 17.1,
-            # perturb=1.0000001,  # 2.,  # 1.001,  # 17.1,
-            # perturb=.05,  # 2.,  # 1.001,  # 17.1
+            perturb=60.0,  # 70 might work  # 2.,  # 1.001,  # 17.1,
             perturb_norm=perturb_norm,
             # perturb=1.5,  # 2.,  # 1.001,  # 17.1,
             # perturb=2.,  # 2.,  # 1.001,  # 17.1,
@@ -158,7 +157,7 @@ def build_model(
         vgg(rgb=data_tensor, label=labels, constructor=gammanet_constructor)
         activity = vgg.fgru_0
 
-        # Load tuning curve transform for fb output
+        # Load tuning curve transform
         moments = np.load(fb_moments_file)
         means = moments["means"]
         stds = moments["stds"]
@@ -166,8 +165,8 @@ def build_model(
 
         # Transform activity to outputs
         bs, h, w, _ = vgg.fgru_0.get_shape().as_list()
-        hh, hw = h // 2, w // 2
         sel_units = tf.reshape(vgg.fgru_0[:, hh - 2: hh + 2, hw - 2: hw + 2, :], [bs, -1])
+        # grad0 = tf.gradients(sel_units, vgg.conv2_2)[0]
 
         if perturb_norm:
             # Normalize activities -- Not normalized!!
@@ -180,12 +179,22 @@ def build_model(
         activity = tf.matmul(
             tf.matmul(inv_clf, clf, transpose_b=True), sel_units, transpose_b=True)
 
-    # bg = tf.reduce_mean(vgg.conv2_2 ** 2, reduction_indices=[-1], keep_dims=True)
-    # bg = tf.cast(tf.greater(bg, tf.reduce_mean(bg)), tf.float32)
-    # bg_dil = dilation2d(img=bg, extent=5)
-    # extra_activities = {"mask": bg, "mask_dil": bg_dil}  # {"mask": tf.reduce_mean(vgg.conv2_2 ** 2, reduction_indices=[-1])}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
-    # extra_activities = {"fgru": vgg.fgru_0, "penalty": tf.constant(0.), "conv": vgg.error_1}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
-    extra_activities = {"fgru": vgg.tc_inv, "penalty": tf.constant(0.), "conv": vgg.conv2_2}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
+    impatch = data_tensor[:, hh * 2 - 14: hh * 2 + 18, hw * 2 - 14: hw * 2 + 18]
+    mx = max(h, w)
+    x, y = np.meshgrid(np.arange(mx), np.arange(mx))
+    x = x[:h, :w]
+    y = y[:h, :w]
+    xy = np.stack((x, y), -1)
+    coord = np.asarray([hh, hw])[None]
+    dist = np.sqrt(((xy - coord) ** 2).mean(-1))
+    dist = dist / dist.max()
+    # penalty = tf.reduce_mean(tf.tanh(tf.abs(tf.squeeze(vgg.fgru_0))), -1) * dist
+    # dist = dist * tf.squeeze(vgg.mask)  # zero out units in the RF
+    # penalty = tf.cast(tf.sigmoid(tf.reduce_mean(tf.abs(tf.squeeze(vgg.fgru_0)), -1)) - 0.5, tf.float32) * dist.astype(np.float32)
+    penalty = tf.cast(tf.sigmoid(tf.reduce_mean(tf.abs(tf.squeeze(vgg.mult)), -1)) - 0.5, tf.float32) * dist.astype(np.float32)
+    penalty = tf.cast(penalty, tf.float32) * tf.cast(1. - tf.squeeze(vgg.mask), tf.float32)  # 0 values in the H-diameter
+    penalty = penalty * 0.0
+    extra_activities = {"fgru": vgg.fgru_0, "mask": vgg.mask, "penalty": penalty, "impatch": impatch}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
     if activity.dtype != tf.float32:
         activity = tf.cast(activity, tf.float32)
     # return [activity, h_deep], extra_activities

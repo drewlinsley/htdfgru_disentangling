@@ -124,24 +124,25 @@ def build_model(
 
     # Build model
     with tf.variable_scope('vgg', reuse=reuse):
+        hh, hw = 109, 119
         aux = get_aux()
         # moments_file = "../undo_bias/neural_models/linear_moments/INSILICO_BSDS_vgg_gratings_simple_tb_feature_matrix.npz"
         # model_file = "../undo_bias/neural_models/linear_models/INSILICO_BSDS_vgg_gratings_simple_tb_model.joblib.npy"
-        fb_moments_file = "../undo_bias/neural_models/linear_moments/tb_feature_matrix.npz"
-        fb_model_file = "../undo_bias/neural_models/linear_models/tb_model.joblib.npy"
-        ff_moments_file = "../undo_bias/neural_models/linear_moments/conv2_2_tb_feature_matrix.npz"
-        ff_model_file = "../undo_bias/neural_models/linear_models/conv2_2_tb_model.joblib.npy"
+        moments_file = "../undo_bias/neural_models/linear_moments/tb_feature_matrix.npz"
+        model_file = "../undo_bias/neural_models/linear_models/tb_model.joblib.npy"
         vgg = vgg16.Vgg16(
             vgg16_npy_path='/media/data_cifs_lrs/clicktionary/pretrained_weights/vgg16.npy',
             reuse=reuse,
             aux=aux,
-            moments_file=ff_moments_file,  # Perturb FF drive
-            model_file=ff_model_file,
+            hh=hh,
+            hw=hw,
+            moments_file=moments_file,
+            model_file=model_file,
             train=False,
             timesteps=8,
-            perturb=1.2,  # 2.,  # 1.001,  # 17.1,
+            # perturb=0.0001,  # 2.,  # 1.001,  # 17.1,
             # perturb=1.0000001,  # 2.,  # 1.001,  # 17.1,
-            # perturb=.05,  # 2.,  # 1.001,  # 17.1
+            perturb=0.01,  # 2.,  # 1.001,  # 17.1,
             perturb_norm=perturb_norm,
             # perturb=1.5,  # 2.,  # 1.001,  # 17.1,
             # perturb=2.,  # 2.,  # 1.001,  # 17.1,
@@ -158,15 +159,14 @@ def build_model(
         vgg(rgb=data_tensor, label=labels, constructor=gammanet_constructor)
         activity = vgg.fgru_0
 
-        # Load tuning curve transform for fb output
-        moments = np.load(fb_moments_file)
+        # Load tuning curve transform
+        moments = np.load(moments_file)
         means = moments["means"]
         stds = moments["stds"]
-        clf = np.load(fb_model_file).astype(np.float32)
+        clf = np.load(model_file).astype(np.float32)
 
         # Transform activity to outputs
         bs, h, w, _ = vgg.fgru_0.get_shape().as_list()
-        hh, hw = h // 2, w // 2
         sel_units = tf.reshape(vgg.fgru_0[:, hh - 2: hh + 2, hw - 2: hw + 2, :], [bs, -1])
 
         if perturb_norm:
@@ -180,12 +180,8 @@ def build_model(
         activity = tf.matmul(
             tf.matmul(inv_clf, clf, transpose_b=True), sel_units, transpose_b=True)
 
-    # bg = tf.reduce_mean(vgg.conv2_2 ** 2, reduction_indices=[-1], keep_dims=True)
-    # bg = tf.cast(tf.greater(bg, tf.reduce_mean(bg)), tf.float32)
-    # bg_dil = dilation2d(img=bg, extent=5)
-    # extra_activities = {"mask": bg, "mask_dil": bg_dil}  # {"mask": tf.reduce_mean(vgg.conv2_2 ** 2, reduction_indices=[-1])}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
-    # extra_activities = {"fgru": vgg.fgru_0, "penalty": tf.constant(0.), "conv": vgg.error_1}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
-    extra_activities = {"fgru": vgg.tc_inv, "penalty": tf.constant(0.), "conv": vgg.conv2_2}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
+    impatch = data_tensor[:, hh * 2: hh * 2 + 36, hw * 2: hw * 2 + 36]
+    extra_activities = {"fgru": vgg.fgru_0, "impatch": impatch}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
     if activity.dtype != tf.float32:
         activity = tf.cast(activity, tf.float32)
     # return [activity, h_deep], extra_activities

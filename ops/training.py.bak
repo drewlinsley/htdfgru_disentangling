@@ -608,7 +608,6 @@ def training_loop(
                         # from matplotlib import pyplot as plt;plt.imshow((it_train_dict['impatch'].squeeze() + np.asarray([123.68, 116.78, 103.94])[None, None]).astype(np.uint8));plt.show()
                         # from matplotlib import pyplot as plt;dd = it_train_dict["grad0"];plt.imshow(np.abs(dd.squeeze()).mean(-1) / (np.abs(dd.squeeze()).std(-1) + 1e-4));plt.show()
                         # from matplotlib import pyplot as plt;dd = it_train_dict['mask'];plt.imshow(dd.squeeze().mean(-1));plt.show()
-                        import pdb;pdb.set_trace()
                         train_logits.append([it_train_dict["train_logits"].ravel()])
                         out_dir = "circuits_{}".format(config.out_dir)
                         py_utils.make_dir(out_dir)

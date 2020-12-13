@@ -1,4 +1,3 @@
-import math
 import inspect
 import os
 import numpy as np
@@ -13,15 +12,14 @@ from layers.recurrent.gammanet_refactored_alt import GN
 from layers.recurrent.gn_recurrent_ops_alt_bn import GNRnOps
 from layers.recurrent.gn_feedforward_ops import GNFFOps
 from layers.feedforward import normalization
-from utils import linalg
 
 
-def old_pinv(matrix, eps=1e-5):  # 1e-8
+def pinv(matrix):
     """Returns the Moore-Penrose pseudo-inverse"""
 
     s, u, v = tf.svd(matrix)
     
-    threshold = tf.reduce_max(s) * eps
+    threshold = tf.reduce_max(s) * 1e-5
     s_mask = tf.boolean_mask(s, s > threshold)
     s_inv = tf.diag(tf.concat([1. / s_mask, tf.zeros([tf.size(s) - tf.size(s_mask)])], 0))
 
@@ -46,13 +44,10 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
             reuse,
             fgru_normalization_type,
             ff_normalization_type,
-            rcond=1e-4,
+            perturb=None,
+            perturb_norm=True,
             moments_file=None,
             model_file=None,
-            perturb_norm=False,
-            perturb=None,
-            hh=None,
-            hw=None,
             layer_name='recurrent_vgg16',
             ff_nl=tf.nn.relu,
             horizontal_kernel_initializer=tf.initializers.orthogonal(),
@@ -84,12 +79,9 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
             path = os.path.join(path, "vgg16.npy")
             vgg16_npy_path = path
             print path
-        self.hh = hh
-        self.hw = hw
-        self.rcond = rcond
+        self.perturb_norm = perturb_norm
         self.moments_file = moments_file
         self.model_file = model_file
-        self.perturb_norm = perturb_norm
         self.data_format = data_format
         self.pool_strides = pool_strides
         self.strides = strides
@@ -184,37 +176,6 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
         self.data_dict = np.load(vgg16_npy_path, allow_pickle=True, encoding='latin1').item()
         print("npy file loaded")
 
-    def apply_perturbation(self, activity):
-        # Weight the target units with the gradient
-        bs, h, w, _ = activity.get_shape().as_list()
-        if self.hh is None:
-            hh = h // 2
-        else:
-            hh = self.hh
-        if self.hw is None:
-            hw = w // 2
-            ub, lb = 2, -2
-        else:
-            hw = self.hw
-            ub, lb = 4, 0
-        perturb_mask = np.ones(activity.get_shape().as_list(), dtype=np.float32)
-        perturb_mask[:, hh - lb: hh + ub, hw - lb: hw + ub] = 0.
-
-        # BG needs to be ignored via stopgrad
-        bg = tf.reduce_mean(activity ** 2, reduction_indices=[-1], keep_dims=True)
-        bg = tf.cast(tf.greater(bg, tf.reduce_mean(bg)), tf.float32)
-        bg = erosion2d(img=bg, extent=9)
-        mult = tf.get_variable(name="perturb_viz_mult", initializer=np.ones((activity.get_shape().as_list())).astype(np.float32), trainable=True)  # Perturbed fgru
-        add = tf.get_variable(name="perturb_viz_add", initializer=np.zeros((activity.get_shape().as_list())).astype(np.float32), trainable=True)  # Perturbed fgru
-
-        mult = mult * perturb_mask + tf.stop_gradient(1 - perturb_mask)
-        add = add * perturb_mask + tf.stop_gradient(1 - perturb_mask)
-        activity = mult * activity  # + add
-
-        # Mask the BG
-        activity = bg * activity + tf.stop_gradient((1 - bg) * activity)
-        return activity
-
     def __call__(self, rgb, label, constructor=None, store_timesteps=False):
         """
         load variable from npy to build the VGG
@@ -240,80 +201,107 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
             recurrent_ff=self.recurrent_ff,
             init=self.hidden_init,
             dtype=self.dtype)
+        # self.fgru_0 = tf.get_variable(name="perturb_viz", initializer=self.conv2_2, trainable=True)
         if self.perturb is not None:
             # Load weights for deriving tuning curves
+            # moments_file = "../undo_bias/neural_models/linear_moments/INSILICO_BSDS_vgg_gratings_simple_tb_feature_matrix.npz"
+            # model_file = "../undo_bias/neural_models/linear_models/INSILICO_BSDS_vgg_gratings_simple_tb_model.joblib.npy"
             moments = np.load(self.moments_file)
             means = moments["means"]
             stds = moments["stds"]
             clf = np.load(self.model_file).astype(np.float32)
             clf_sq = clf.T.dot(clf)
-            inv_clf = np.linalg.inv(clf_sq).astype(np.float32)  # Precompute inversion
+            inv_clf = np.linalg.pinv(clf_sq).astype(np.float32)  # Precompute inversion
 
             # Get target units
-            bs, h, w, _ = self.conv2_2.get_shape().as_list()
-            # hh, hw = h // 2, w // 2
-            if self.hh is None:
-                hh = h // 2
-                use_mask = True
-            else:
-                hh = self.hh
-                use_mask = False
-            if self.hw is None:
-                hw = w // 2
-                # ub, lb = 2, -2
-            else:
-                hw = self.hw
-                # ub, lb = 4, 0
-            ub, lb = 2, 2
-            if 1:  # self.perturb != 1:  # self.perturb != 1:  # self.perturb <= 1:
-                # sel_units_raw = self.conv2_2[:, hh - 2: hh + 2, hw - 2: hw + 2, :]
-                sel_units_raw = label
+            bs, h, w, _ = self.fgru_0.get_shape().as_list()
+            hh, hw = h // 2, w // 2
+            # sel_units_raw = self.fgru_0[:, hh - 2: hh + 2, hw - 2: hw + 2, :]
+            # sel_units = tf.reshape(sel_units_raw, [bs, -1])  # Squeeze to a matrix
+
+            # # Normalize activities
+            # sel_units = (sel_units - means) / stds
+
+            # # Transform to population tuning curves
+            # tc = tf.matmul(tf.matmul(inv_clf, clf, transpose_b=True), sel_units, transpose_b=True)
+
+            # Reweight tuning curves
+            # tc = tc * self.perturb
+            if 0:  # self.perturb != 1:  # self.perturb <= 1:
+                sel_units_raw = self.fgru_0[:, hh - 2: hh + 2, hw - 2: hw + 2, :]
                 sel_units = tf.reshape(sel_units_raw, [bs, -1])  # Squeeze to a matrix
 
+                # Normalize activities
                 if self.perturb_norm:
-                    # Normalize activities
                     sel_units = (sel_units - means) / stds
 
                 # # Transform to population tuning curves
                 tc = tf.matmul(tf.matmul(inv_clf, clf, transpose_b=True), sel_units, transpose_b=True)
-                # tc_min = tf.reduce_min(tc)
-                # tc = tc + tc_min
-                tc = tc * self.perturb   # mdu
-                # tc = tc - tc_min
-            elif 0:  # self.perturb == 1.:  # ROLL
+
+                # # Reweight tuning curves
+                # tc = tc + self.perturb
+                ###
+                # tc = tf.transpose(label * self.perturb)
+                if self.perturb == 1:  # ROLL RIGHT
+                    tc = tf.roll(tc, 1, 0)  # Need to do all rolls [30, 60, 90] eventually
+                elif self.perturb == 2:  # ROLL RIGHT
+                    tc = tf.roll(tc, 2, 0)  # Need to do all rolls [30, 60, 90] eventually
+                elif self.perturb == 3:  # ROLL RIGHT
+                    tc = tf.roll(tc, 3, 0)  # Need to do all rolls [30, 60, 90] eventually
+                elif self.perturb == -1:
+                    tc = tf.roll(tc, -1, 0)  # Need to do all rolls [30, 60, 90] eventually
+                elif self.perturb == -2:
+                    tc = tf.roll(tc, -2, 0)  # Need to do all rolls [30, 60, 90] eventually
+                elif self.perturb == -3:
+                    tc = tf.roll(tc, -3, 0)  # Need to do all rolls [30, 60, 90] eventually
+                else:
+                    # Reweight tuning curves
+                    tc = tc * self.perturb + self.perturb
+
+            elif 0:  # self.perturb == 1:  # ROLL
                 tc_inv = tf.reshape(label, [-1])  # * 200  # wtf???
-            elif 0:  # self.perturb < 1:  # self.perturb <= 1:  # else:
+            else:
                 # Triganometric perturbations
-                sel_units_raw = label  # self.fgru_0[:, hh - 2: hh + 2, hw - 2: hw + 2, :]
-                # sel_units_raw = self.conv2_2[:, hh - 2: hh + 2, hw - 2: hw + 2, :]
+                sel_units_raw = self.fgru_0[:, hh - 2: hh + 2, hw - 2: hw + 2, :]
                 sel_units = tf.reshape(sel_units_raw, [bs, -1])  # Squeeze to a matrix
 
-                if self.perturb_norm:
-                    # Normalize activities  # Used to be commented
-                    sel_units = (sel_units - means) / stds
+                # # Normalize activities
+                # sel_units = (sel_units - means) / stds
 
                 # # Transform to population tuning curves
                 tc = tf.matmul(tf.matmul(inv_clf, clf, transpose_b=True), sel_units, transpose_b=True)
-                # tc = tf.transpose(label)
                 a = 3.
                 bin_size = 30.
                 mu = tf.cast(tf.argmax(tf.squeeze(tc)), tf.float32) * bin_size  # PASS THE TUNING CENTER
-                b = 0  # -90  # -60 - mu  # mu - 60
-                orientations = np.arange(0, 180, bin_size)
-                # orientations = tf.range(mu - 90, mu - 90 + 1)  # tf.range(mu - 90, mu + 90, bin_size)
+                # b = -(mu - 120)   # * tf.cast(tf.less(mu, 120), tf.float32)
+                # b = -60  # 90 for 150 60 for 120 30 for 90 0 for 60 -30 for 30 -60 for 0
+                b = mu - 60
+                # -60 is 120, (mu - 120) is -30 and +
+                # orientations = np.arange(180).astype(np.float32)
+                orientations = np.linspace(0, 180, 30)
                 perturbation = tf.cos((tf.constant(np.pi) * (orientations - (b + mu)) / 180))
+                # perturbation = tf.nn.relu(perturbation)
                 perturbation = self.perturb * (perturbation ** a)
+
+                """
+                sel_units_raw = self.fgru_0[:, hh - 2: hh + 2, hw - 2: hw + 2, :]
+                sel_units = tf.reshape(sel_units_raw, [bs, -1])  # Squeeze to a matrix
+
+                # # Normalize activities
+                sel_units = (sel_units - means) / stds
+
+                # # Transform to population tuning curves
+                tc = tf.matmul(tf.matmul(inv_clf, clf, transpose_b=True), sel_units, transpose_b=True)
+                """
 
                 # bin here
                 binned_perturbation = tf.reduce_mean(tf.reshape(perturbation, [int(180 / bin_size), -1]), -1)
                 B = tf.expand_dims(binned_perturbation, 1)
-                # A = tf.reshape(label, [-1, 1])
-                A = tf.reshape(tc, [-1, 1])
+                A = tf.reshape(label, [-1, 1])
                 Z = tf.matmul(A, A, transpose_b=True)
-                M = tf.matmul(tf.matmul(B, A, transpose_b=True), linalg.pinv(Z, rcond=self.rcond))
-                tc = tf.matmul(M, A)  # , transpose_b=True)  # This is our perturbed activity
-            else:
-                raise NotImplementedError(self.perturb)
+                M = tf.matmul(tf.matmul(B, A, transpose_b=True), pinv(Z))
+                tc = tf.matmul(M, label, transpose_b=True)  # This is out perturbed activity
+                # tc = tf.transpose(tc)
             """
             # Get gradient of tuning curves wrt target units
             tc_grad = tf.gradients(tc, sel_units)[0]
@@ -322,32 +310,22 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
             # Invert the inverted model
             # tc_inv = tf.matmul(tf.matmul(inv_clf, clf, transpose_b=True), tc, transpose_a=True)  # Numerical issues
             if 1:  # self.perturb != 1:
-                # Fix the tc bump so that it's on the same idx as label
-                """
-                label_argmax = tf.cast(tf.argmax(tf.squeeze(label)), tf.float32)
-                tc_argmax = tf.cast(tf.argmax(tf.squeeze(tc)), tf.float32)
-                diff = tc_argmax - label_argmax
-                tc = tf.roll(tc, tf.cast(diff, tf.int32), 1)
-                """
+                inv_inv = np.linalg.pinv(clf.dot(clf.T))
+                tc_inv = tf.matmul(tf.matmul(tf.matmul(tf.matmul(tc, clf.T, transpose_a=True), clf), clf.T), inv_inv) # predictions.T @ clf.T @ clf @ clf.T @ np.linalg.pinv(clf @ clf.T)
+                tc_inv = tf.reshape(tc_inv, [-1])
 
-                inv_inv = np.linalg.pinv(clf.dot(clf.T), rcond=self.rcond)
-                # tc_inv = tf.matmul(tf.matmul(tf.matmul(tf.matmul(tc, clf.T, transpose_a=True), clf), clf.T), inv_inv) # predictions.T @ clf.T @ clf @ clf.T @ np.linalg.pinv(clf @ clf.T)
-                tc_inv = tf.matmul(tc, tf.matmul(clf.T, tf.matmul(clf, tf.matmul(clf.T, inv_inv))), transpose_a=True)
-                tc_inv = tf.nn.relu(tf.reshape(tc_inv, [-1]))
-                self.tc_inv = tc_inv
+                # Unnormalize activities
                 if self.perturb_norm:
-                    # Unnormalize activities
                     tc_inv = tc_inv * stds + means
 
-            # tc_inv = tf.reshape(label, tc_inv.get_shape().as_list())  # NEW TRY
             # Weight the target units with the gradient
-            perturb_mask = np.ones(self.conv2_2.get_shape().as_list(), dtype=np.float32)
-            perturb_idx = np.zeros(self.conv2_2.get_shape().as_list(), dtype=np.float32)
-            perturb_bias = tf.zeros(self.conv2_2.get_shape().as_list(), dtype=tf.float32)
-            # self.center_h = self.fgru_0.get_shape().as_list()[1] // 2
-            # self.center_w = self.fgru_0.get_shape().as_list()[2] // 2
-            perturb_mask[:, hh - lb: hh + ub, hw - lb: hw + ub] = 0.
-            perturb_idx[:, hh - lb: hh + ub, hw - lb: hw + ub] = 1.
+            perturb_mask = np.ones(self.fgru_0.get_shape().as_list(), dtype=np.float32)
+            perturb_idx = np.zeros(self.fgru_0.get_shape().as_list(), dtype=np.float32)
+            perturb_bias = tf.zeros(self.fgru_0.get_shape().as_list(), dtype=tf.float32)
+            self.center_h = self.fgru_0.get_shape().as_list()[1] // 2
+            self.center_w = self.fgru_0.get_shape().as_list()[2] // 2
+            perturb_mask[:, hh - 2: hh + 2, hw - 2: hw + 2] = 0.
+            perturb_idx[:, hh - 2: hh + 2, hw - 2: hw + 2] = 1.
 
             # BG needs to be ignored via stopgrad
             # bg = tf.cast(tf.greater_equal(tf.reduce_mean(self.fgru_0 ** 2, reduction_indices=[-1], keep_dims=True), 10.), tf.float32)
@@ -358,69 +336,55 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
             if 0:  # self.perturb < 0:
                 raise RuntimeError("Negative perturbs dont make sense.")
             else:
-                perturb_idxs = np.where(perturb_idx.reshape(-1) == 1)[0]
+                perturb_idxs = np.where(perturb_idx.reshape(-1))
                 perturb_bias_shape = perturb_bias.get_shape().as_list()
                 perturb_bias = tf.get_variable(name="perturb_bias", initializer=tf.reshape(perturb_bias, [-1]), dtype=tf.float32, trainable=False)
-                perturb_bias = tf.scatter_update(perturb_bias, perturb_idxs, tc_inv)
+                perturb_bias = tf.scatter_update(perturb_bias, perturb_idxs[0], tc_inv)
                 perturb_bias = tf.stop_gradient(tf.reshape(perturb_bias, perturb_bias_shape))  # Fixed perturbation
-                self.perturb_bias = perturb_bias
-
             if self.perturb_method == "kernel":
-                raise RuntimeError()
+                ks = 21
+                # Paramaterize the learned hidden state as conv2_2 * kernel
+                self.perturb_mask = tf.get_variable(name="perturb_mask", initializer=perturb_mask, trainable=False)
+                # self.perturb_bias = tf.get_variable(name="perturb_bias", initializer=perturb_bias, trainable=False)
+                # fgru_kernel = tf.get_variable(name="perturb_viz", shape=(ks, ks, 128, 1), initializer=tf.compat.v1.keras.initializers.Orthogonal, trainable=True)
+                fgru_kernel = tf.get_variable(name="perturb_viz", initializer=np.ones((ks, ks, 128, 1), dtype=np.float32) / (ks * ks), trainable=True)
+                # if self.perturb > 1:
+                #     fgru_kernel = fgru_kernel + 1  # Center around 1
+                """
+                fgru_kernel = tf.get_variable(name="perturb_viz", shape=(ks, ks, 1, 1), initializer=tf.compat.v1.keras.initializers.Orthogonal, trainable=True)
+                sf = tf.split(self.fgru_0, self.fgru_0.get_shape().as_list()[-1], axis=-1)
+                of = []
+                for f in sf:
+                    of.append(tf.nn.conv2d(f, fgru_kernel, strides=[1, 1, 1, 1], padding="SAME"))
+                self.fgru_0 = tf.concat(of, -1)
+                """
+                # self.fgru_0 = tf.nn.depthwise_conv2d(tf.stop_gradient(self.conv2_2), fgru_kernel, strides=[1, 1, 1, 1], padding="SAME")
+                pre_kernel = tf.stop_gradient(self.conv2_2) * perturb_mask + perturb_bias
+                self.fgru_0 = tf.nn.depthwise_conv2d(pre_kernel, fgru_kernel, strides=[1, 1, 1, 1], padding="SAME")
+                # self.fgru_0 = self.fgru_0 * self.perturb_mask + self.perturb_bias  # Add the bias back in!
+                # self.fgru_0 = bg * (perturb_bias + (self.fgru_0 * perturb_mask)) + tf.stop_gradient(self.fgru_0 * (1 - bg))
             elif self.perturb_method == "hidden_state":
                 # self.perturb_mask = tf.get_variable(name="perturb_mask", initializer=perturb_mask, trainable=False)
-                # mult = tf.get_variable(name="perturb_viz_mult", initializer=np.ones((self.conv2_2.get_shape().as_list())).astype(np.float32), trainable=True)  # Perturbed fgru
-                # mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.ones_like(perturb_mask), trainable=True)  # Perturbed fgru
-                # mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.zeros_like(perturb_mask), trainable=True)  # Perturbed fgru
-                mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.random.normal(perturb_mask.shape, stddev=1e-4), trainable=True)  # Perturbed fgru
-                # mult = tf.get_variable(name="perturb_viz_mult", initializer=self.kernel_initializer, shape=perturb_mask.shape, trainable=True)  # Perturbed fgru
-                # mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.ones_like(perturb_mask) - tf.random.normal(perturb_mask.shape, stddev=1e-4), trainable=True)  # Perturbed fgru
-                # mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.zeros_like(perturb_mask) - 0.01, trainable=True)  # Perturbed fgru
+                mult = tf.get_variable(name="perturb_viz_mult", initializer=np.ones((self.conv2_2.get_shape().as_list())).astype(np.float32), trainable=True)  # Perturbed fgru
+                add = tf.get_variable(name="perturb_viz_add", initializer=np.zeros((self.conv2_2.get_shape().as_list())).astype(np.float32), trainable=True)  # Perturbed fgru
 
-                # mult = mult * self.conv2_2 * perturb_mask + tf.stop_gradient((1 - perturb_mask) * mult)
-                # mult = mult + tf.stop_gradient((1 - perturb_mask) * mult)
-                # add = add * perturb_mask + tf.stop_gradient(1 - perturb_mask)
-                perturb_bias = tf.nn.relu(perturb_bias)
+                mult = mult * perturb_mask + tf.stop_gradient(1 - perturb_mask)
+                add = add * perturb_mask + tf.stop_gradient(1 - perturb_mask)
+                # self.fgru_0 = add + perturb_bias
+                # self.fgru_0 = self.conv2_2 * perturb_mask + tf.stop_gradient(1 - perturb_mask)
+                # self.fgru_0 = self.fgru_0 + add + perturb_bias
+                self.fgru_0 = mult * self.conv2_2 + perturb_bias
+                # self.fgru_0 = mult * self.fgru_0 + add + perturb_bias
 
-                #### THIS WORKS
-                self.fgru_0 = self.conv2_2 * perturb_mask + perturb_bias  # * perturb_mask + perturb_bias  #  + perturb_bias  # * tf.identity(self.conv2_2) + perturb_bias
-                # self.fgru_0 = self.fgru_0 * perturb_mask + tf.stop_gradient((1 - perturb_mask) * self.fgru_0)
-                self.mult = mult * perturb_mask + tf.stop_gradient((1 - perturb_mask) * mult) # Attach so we can penalize
-                self.perturb_bias = perturb_bias
-                # self.mult = self.mult  #  + perturb_bias
 
-                # Fix the FF drive!
-                # self.conv2_2 = tf.stop_gradient(self.conv2_2) * perturb_mask - perturb_bias  # tf.nn.relu(perturb_bias)
-                self.conv2_2 = self.conv2_2 * perturb_mask + perturb_bias  # tf.nn.relu(perturb_bias)
-                self.conv2_2 = tf.nn.relu(self.conv2_2)
-                if 0:  # use_mask:
-                    # Mask the BG
-                    # self.fgru_0 = bg * self.fgru_0 + tf.stop_gradient((1 - bg) * self.fgru_0)
-                    self.mult = bg * self.mult + tf.stop_gradient((1 - bg) * self.mult)
-                else:
-                    # Simulate RF extent as the mask
-                    # mask = ((1. - perturb_mask) * 0.6) + 0.2
-                    mask = 1. - perturb_mask
-                    kernel = tf.ones((3, 3, 128, 128), dtype=tf.float32)  #  / 9.            
-                    for rf in range(self.timesteps * 2):
-                       mask = tf.nn.conv2d(mask, kernel, strides=[1, 1, 1, 1], padding="SAME") 
-                    mask = tf.cast(tf.not_equal(mask, 0), tf.float32)
-                    sz = tf.reduce_max(tf.reduce_sum(mask[0, ..., 0], reduction_indices=[0])) // 2
-                    mx = max(h, w)
-                    x, y = np.meshgrid(np.arange(mx), np.arange(mx))
-                    x = x[:h, :w]
-                    y = y[:h, :w]
-                    xy = np.stack((x, y), -1)
-                    # coord = np.asarray([hh, hw])[None]
-                    coord = np.asarray([hw, hh])[None]
-                    dist = np.sqrt(((xy - coord) ** 2).mean(-1)).astype(np.float32)
-                    mask = tf.less(dist, sz)
-                    mask = tf.cast(tf.expand_dims(tf.expand_dims(mask, 0), -1), tf.float32)
-                    # self.fgru_0 = mask * self.fgru_0 + tf.stop_gradient((1 - mask) * self.fgru_0)
-                    self.mult = mask * self.mult + tf.stop_gradient((1 - mask) * self.mult)
-                    self.mask = mask
-            else:
-                self.fgru_0 = self.conv2_2
+                # self.fgru_0 = (add * perturb_mask + tf.stop_gradient(1 - perturb_mask)) + perturb_bias
+
+                # self.fgru_0 = (mult * perturb_mask + add + perturb_bias) + tf.stop_gradient(1 - perturb_mask)
+                # Mask the BG
+                self.fgru_0 = bg * self.fgru_0 + tf.stop_gradient((1 - bg) * self.fgru_0)
+                # self.fgru_0 = perturb_bias
+        else:
+            self.fgru_0 = self.conv2_2
 
         ta = []
         for idx in range(self.timesteps):
@@ -436,20 +400,11 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
     def build(self, i0, extra_convs=True):
         # Convert RGB to BGR
         with tf.variable_scope('fgru'):
-            if 1:  # i0 == 0:  # Add a control variable to correct perturbation
-                with tf.variable_scope("correction", reuse=tf.AUTO_REUSE):
-                    error_horizontal_0, fgru_activity = self.fgru_ops(  # h^(1), h^(2)
-                        ff_drive=self.conv2_2,
-                        h2=self.fgru_0,
-                        layer_id=0,
-                        i0=i0,
-                        perturb_function=self.apply_perturbation)
-            else:
-                error_horizontal_0, fgru_activity = self.fgru_ops(  # h^(1), h^(2)
-                    ff_drive=self.conv2_2,
-                    h2=self.fgru_0,
-                    layer_id=0,
-                    i0=i0)
+            error_horizontal_0, fgru_activity = self.fgru_ops(  # h^(1), h^(2)
+                ff_drive=self.conv2_2,
+                h2=self.fgru_0,
+                layer_id=0,
+                i0=i0)
         self.fgru_0 = fgru_activity  # + self.conv2_2
         self.error_0 = error_horizontal_0
         self.pool2 = self.max_pool(self.fgru_0, 'pool2')
@@ -649,6 +604,7 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                 layer_id=6,
                 i0=i0)
         self.fgru_0 = self.fgru_0 + fgru_activity
+        # self.fgru_0 = fgru_activity
 
     def max_pool(self, bottom, name):
         return tf.nn.max_pool(

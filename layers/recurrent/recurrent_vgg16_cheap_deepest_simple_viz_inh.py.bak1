@@ -13,10 +13,22 @@ from layers.recurrent.gammanet_refactored_alt import GN
 from layers.recurrent.gn_recurrent_ops_alt_bn import GNRnOps
 from layers.recurrent.gn_feedforward_ops import GNFFOps
 from layers.feedforward import normalization
-from utils import linalg
 
 
-def old_pinv(matrix, eps=1e-5):  # 1e-8
+def outFromIn(conv, layerIn):
+    n_in, j_in, r_in, start_in = layerIn
+    k, s, p = conv
+    n_out = np.floor((n_in - k + 2 * p) / s) + 1
+    actualP = (n_out - 1) * s - n_in + k
+    pR = math.ceil(actualP / 2)
+    pL = math.floor(actualP / 2)
+    j_out = j_in * s
+    r_out = r_in + (k - 1) * j_in
+    start_out = start_in + ((k - 1) / 2 - pL) * j_in
+    return n_out, j_out, r_out, start_out
+
+
+def pinv(matrix, eps=1e-8):  # 1e-5
     """Returns the Moore-Penrose pseudo-inverse"""
 
     s, u, v = tf.svd(matrix)
@@ -46,7 +58,6 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
             reuse,
             fgru_normalization_type,
             ff_normalization_type,
-            rcond=1e-4,
             moments_file=None,
             model_file=None,
             perturb_norm=False,
@@ -86,7 +97,6 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
             print path
         self.hh = hh
         self.hw = hw
-        self.rcond = rcond
         self.moments_file = moments_file
         self.model_file = model_file
         self.perturb_norm = perturb_norm
@@ -265,7 +275,7 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                 hw = self.hw
                 # ub, lb = 4, 0
             ub, lb = 2, 2
-            if 1:  # self.perturb != 1:  # self.perturb != 1:  # self.perturb <= 1:
+            if 0:  # self.perturb != 1:  # self.perturb != 1:  # self.perturb <= 1:
                 # sel_units_raw = self.conv2_2[:, hh - 2: hh + 2, hw - 2: hw + 2, :]
                 sel_units_raw = label
                 sel_units = tf.reshape(sel_units_raw, [bs, -1])  # Squeeze to a matrix
@@ -276,13 +286,10 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
 
                 # # Transform to population tuning curves
                 tc = tf.matmul(tf.matmul(inv_clf, clf, transpose_b=True), sel_units, transpose_b=True)
-                # tc_min = tf.reduce_min(tc)
-                # tc = tc + tc_min
                 tc = tc * self.perturb   # mdu
-                # tc = tc - tc_min
-            elif 0:  # self.perturb == 1.:  # ROLL
+            elif self.perturb == 1.:  # ROLL
                 tc_inv = tf.reshape(label, [-1])  # * 200  # wtf???
-            elif 0:  # self.perturb < 1:  # self.perturb <= 1:  # else:
+            elif 1:  # self.perturb < 1:  # self.perturb <= 1:  # else:
                 # Triganometric perturbations
                 sel_units_raw = label  # self.fgru_0[:, hh - 2: hh + 2, hw - 2: hw + 2, :]
                 # sel_units_raw = self.conv2_2[:, hh - 2: hh + 2, hw - 2: hw + 2, :]
@@ -298,10 +305,19 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                 a = 3.
                 bin_size = 30.
                 mu = tf.cast(tf.argmax(tf.squeeze(tc)), tf.float32) * bin_size  # PASS THE TUNING CENTER
+                # mu = tf.cast(tf.argmax(tf.squeeze(label)), tf.float32) * bin_size  # PASS THE TUNING CENTER
+
+                # b = -(mu - 120)   # * tf.cast(tf.less(mu, 120), tf.float32)
+                # b = -60  # 90 for 150 60 for 120 30 for 90 0 for 60 -30 for 30 -60 for 0
                 b = 0  # -90  # -60 - mu  # mu - 60
+                # -60 is 120, (mu - 120) is -30 and +
+                # orientations = np.arange(180).astype(np.float32)
+                # orientations = np.linspace(0, 180, bin_size)
                 orientations = np.arange(0, 180, bin_size)
                 # orientations = tf.range(mu - 90, mu - 90 + 1)  # tf.range(mu - 90, mu + 90, bin_size)
                 perturbation = tf.cos((tf.constant(np.pi) * (orientations - (b + mu)) / 180))
+                # perturbation = tf.cos((tf.constant(np.pi) * (-90 + (b + mu)) / 180))
+                # perturbation = tf.nn.relu(perturbation)
                 perturbation = self.perturb * (perturbation ** a)
 
                 # bin here
@@ -310,8 +326,10 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                 # A = tf.reshape(label, [-1, 1])
                 A = tf.reshape(tc, [-1, 1])
                 Z = tf.matmul(A, A, transpose_b=True)
-                M = tf.matmul(tf.matmul(B, A, transpose_b=True), linalg.pinv(Z, rcond=self.rcond))
+                M = tf.matmul(tf.matmul(B, A, transpose_b=True), pinv(Z))
+                # tc = tf.matmul(M, label, transpose_b=True)  # This is our perturbed activity
                 tc = tf.matmul(M, A)  # , transpose_b=True)  # This is our perturbed activity
+                # tc = tf.transpose(tc)
             else:
                 raise NotImplementedError(self.perturb)
             """
@@ -321,7 +339,7 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
             """
             # Invert the inverted model
             # tc_inv = tf.matmul(tf.matmul(inv_clf, clf, transpose_b=True), tc, transpose_a=True)  # Numerical issues
-            if 1:  # self.perturb != 1:
+            if self.perturb != 1:
                 # Fix the tc bump so that it's on the same idx as label
                 """
                 label_argmax = tf.cast(tf.argmax(tf.squeeze(label)), tf.float32)
@@ -330,11 +348,10 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                 tc = tf.roll(tc, tf.cast(diff, tf.int32), 1)
                 """
 
-                inv_inv = np.linalg.pinv(clf.dot(clf.T), rcond=self.rcond)
+                inv_inv = np.linalg.pinv(clf.dot(clf.T))
                 # tc_inv = tf.matmul(tf.matmul(tf.matmul(tf.matmul(tc, clf.T, transpose_a=True), clf), clf.T), inv_inv) # predictions.T @ clf.T @ clf @ clf.T @ np.linalg.pinv(clf @ clf.T)
                 tc_inv = tf.matmul(tc, tf.matmul(clf.T, tf.matmul(clf, tf.matmul(clf.T, inv_inv))), transpose_a=True)
-                tc_inv = tf.nn.relu(tf.reshape(tc_inv, [-1]))
-                self.tc_inv = tc_inv
+                tc_inv = tf.reshape(tc_inv, [-1])
                 if self.perturb_norm:
                     # Unnormalize activities
                     tc_inv = tc_inv * stds + means
@@ -363,7 +380,6 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                 perturb_bias = tf.get_variable(name="perturb_bias", initializer=tf.reshape(perturb_bias, [-1]), dtype=tf.float32, trainable=False)
                 perturb_bias = tf.scatter_update(perturb_bias, perturb_idxs, tc_inv)
                 perturb_bias = tf.stop_gradient(tf.reshape(perturb_bias, perturb_bias_shape))  # Fixed perturbation
-                self.perturb_bias = perturb_bias
 
             if self.perturb_method == "kernel":
                 raise RuntimeError()
@@ -371,32 +387,39 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                 # self.perturb_mask = tf.get_variable(name="perturb_mask", initializer=perturb_mask, trainable=False)
                 # mult = tf.get_variable(name="perturb_viz_mult", initializer=np.ones((self.conv2_2.get_shape().as_list())).astype(np.float32), trainable=True)  # Perturbed fgru
                 # mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.ones_like(perturb_mask), trainable=True)  # Perturbed fgru
-                # mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.zeros_like(perturb_mask), trainable=True)  # Perturbed fgru
-                mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.random.normal(perturb_mask.shape, stddev=1e-4), trainable=True)  # Perturbed fgru
-                # mult = tf.get_variable(name="perturb_viz_mult", initializer=self.kernel_initializer, shape=perturb_mask.shape, trainable=True)  # Perturbed fgru
-                # mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.ones_like(perturb_mask) - tf.random.normal(perturb_mask.shape, stddev=1e-4), trainable=True)  # Perturbed fgru
+                mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.zeros_like(perturb_mask), trainable=True)  # Perturbed fgru
                 # mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.zeros_like(perturb_mask) - 0.01, trainable=True)  # Perturbed fgru
 
                 # mult = mult * self.conv2_2 * perturb_mask + tf.stop_gradient((1 - perturb_mask) * mult)
                 # mult = mult + tf.stop_gradient((1 - perturb_mask) * mult)
                 # add = add * perturb_mask + tf.stop_gradient(1 - perturb_mask)
                 perturb_bias = tf.nn.relu(perturb_bias)
+                self.perturb_bias = perturb_bias
 
                 #### THIS WORKS
-                self.fgru_0 = self.conv2_2 * perturb_mask + perturb_bias  # * perturb_mask + perturb_bias  #  + perturb_bias  # * tf.identity(self.conv2_2) + perturb_bias
-                # self.fgru_0 = self.fgru_0 * perturb_mask + tf.stop_gradient((1 - perturb_mask) * self.fgru_0)
-                self.mult = mult * perturb_mask + tf.stop_gradient((1 - perturb_mask) * mult) # Attach so we can penalize
-                self.perturb_bias = perturb_bias
-                # self.mult = self.mult  #  + perturb_bias
+                self.fgru_0 = mult * perturb_mask + perturb_bias  # * tf.identity(self.conv2_2) + perturb_bias
+                self.fgru_0 = self.fgru_0 * perturb_mask + tf.stop_gradient((1 - perturb_mask) * self.fgru_0)
+                self.mult = mult  # Attach so we can penalize
 
                 # Fix the FF drive!
                 # self.conv2_2 = tf.stop_gradient(self.conv2_2) * perturb_mask - perturb_bias  # tf.nn.relu(perturb_bias)
-                self.conv2_2 = self.conv2_2 * perturb_mask + perturb_bias  # tf.nn.relu(perturb_bias)
-                self.conv2_2 = tf.nn.relu(self.conv2_2)
+                self.conv2_2 = tf.stop_gradient(self.conv2_2) * perturb_mask - perturb_bias  # tf.nn.relu(perturb_bias)
+
+
+                # self.fgru_0 = mult * tf.stop_gradient(self.conv2_2 * perturb_mask) + perturb_bias
+                ### A Test
+                # self.fgru_0 = mult * tf.stop_gradient(self.conv2_2 * perturb_mask) + perturb_bias + add
+
+                # self.fgru_0 = mult + perturb_bias
+                # self.fgru_0 = mult + (self.conv2_2 * perturb_mask) + perturb_bias
+                # self.fgru_0 = mult * self.conv2_2 + add + perturb_bias
+
+                # self.fgru_0 = (add * perturb_mask + tf.stop_gradient(1 - perturb_mask)) + perturb_bias
+
+                # self.fgru_0 = (mult * perturb_mask + add + perturb_bias) + tf.stop_gradient(1 - perturb_mask)
                 if 0:  # use_mask:
                     # Mask the BG
-                    # self.fgru_0 = bg * self.fgru_0 + tf.stop_gradient((1 - bg) * self.fgru_0)
-                    self.mult = bg * self.mult + tf.stop_gradient((1 - bg) * self.mult)
+                    self.fgru_0 = bg * self.fgru_0 + tf.stop_gradient((1 - bg) * self.fgru_0)
                 else:
                     # Simulate RF extent as the mask
                     # mask = ((1. - perturb_mask) * 0.6) + 0.2
@@ -416,9 +439,9 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                     dist = np.sqrt(((xy - coord) ** 2).mean(-1)).astype(np.float32)
                     mask = tf.less(dist, sz)
                     mask = tf.cast(tf.expand_dims(tf.expand_dims(mask, 0), -1), tf.float32)
-                    # self.fgru_0 = mask * self.fgru_0 + tf.stop_gradient((1 - mask) * self.fgru_0)
-                    self.mult = mask * self.mult + tf.stop_gradient((1 - mask) * self.mult)
+                    self.fgru_0 = mask * self.fgru_0 + tf.stop_gradient((1 - mask) * self.fgru_0)
                     self.mask = mask
+
             else:
                 self.fgru_0 = self.conv2_2
 
@@ -436,7 +459,7 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
     def build(self, i0, extra_convs=True):
         # Convert RGB to BGR
         with tf.variable_scope('fgru'):
-            if 1:  # i0 == 0:  # Add a control variable to correct perturbation
+            if i0 == 0:
                 with tf.variable_scope("correction", reuse=tf.AUTO_REUSE):
                     error_horizontal_0, fgru_activity = self.fgru_ops(  # h^(1), h^(2)
                         ff_drive=self.conv2_2,

@@ -1,0 +1,6 @@
+CUDA_VISIBLE_DEVICES=7 python run_job.py --experiment=BSDS500_test_orientation_viz_inh --model=BSDS_inh_natural_0_0 --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_100_no_aux_2019_05_20_00_56_41_386546/model_1240.ckpt-1240 --placeholders --out_dir=circuit_bsds_0_0 --train=BSDS_portrait_connectome_tc_0_0 --val=BSDS_portrait_connectome_tc_0_0
+
+CUDA_VISIBLE_DEVICES=7 python run_job.py --experiment=BSDS500_test_orientation_viz_inh --model=BSDS_inh_natural_0_1 --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_100_no_aux_2019_05_20_00_56_41_386546/model_1240.ckpt-1240 --placeholders --out_dir=circuit_bsds_0_1 --train=BSDS_portrait_connectome_tc_0_1 --val=BSDS_portrait_connectome_tc_0_1
+
+CUDA_VISIBLE_DEVICES=7 python run_job.py --experiment=BSDS500_test_orientation_viz_inh --model=BSDS_inh_natural_0_2 --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_100_no_aux_2019_05_20_00_56_41_386546/model_1240.ckpt-1240 --placeholders --out_dir=circuit_bsds_0_2 --train=BSDS_portrait_connectome_tc_0_2 --val=BSDS_portrait_connectome_tc_0_2
+
