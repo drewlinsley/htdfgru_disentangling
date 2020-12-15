@@ -140,7 +140,7 @@ def build_model(
             model_file=ff_model_file,
             train=False,
             timesteps=8,
-            perturb=60.0,  # 70 might work  # 2.,  # 1.001,  # 17.1,
+            perturb=1.1,  # 70 might work  # 2.,  # 1.001,  # 17.1,
             perturb_norm=perturb_norm,
             # perturb=1.5,  # 2.,  # 1.001,  # 17.1,
             # perturb=2.,  # 2.,  # 1.001,  # 17.1,
@@ -166,6 +166,7 @@ def build_model(
         # Transform activity to outputs
         bs, h, w, _ = vgg.fgru_0.get_shape().as_list()
         sel_units = tf.reshape(vgg.fgru_0[:, hh - 2: hh + 2, hw - 2: hw + 2, :], [bs, -1])
+        # sel_units = tf.reshape(vgg.fgru_0[:, hh: hh + 4, hw: hw + 4, :], [bs, -1])
         # grad0 = tf.gradients(sel_units, vgg.conv2_2)[0]
 
         if perturb_norm:

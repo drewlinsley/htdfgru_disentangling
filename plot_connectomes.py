@@ -87,14 +87,16 @@ def main(path, channel=0):
         ax = axs[idx + num_bins * 2]
         con = np.load(connectome_files[idx])[0][channel]  # [0] - np.load(connectome)[channel][1]  # additive/mulitiplicative
         con = con.squeeze().mean(-1)
-        minmax = max(np.abs(con[40:45, 40:45].min()), con[40:45, 40:45].max())
-        minmax = minmax + minmax * 2
+        # minmax = max(np.abs(con[40:45, 40:45].min()), con[40:45, 40:45].max())
+        # minmax = max(np.abs(con[50:60, 40:50].min()), con[50:60, 40:50].max())
+        # minmax = minmax * 0.5  # + minmax * 2
+        minmax = max(np.abs(np.percentile(con[50:60, 40:50], 5)), np.percentile(con[50:60, 40:50], 95))
         ax.imshow(con, cmap="RdBu_r", vmin=minmax * np.sign(con.min()), vmax=minmax)
         ax.set_xticks([])
         ax.set_yticks([])
         theta = bins[idx]
         ax.set_xlabel(r"$\theta = {}$".format(theta))
-        rcs.append(rotate(con, bins[idx], preserve_range=True, order=0))
+        rcs.append(rotate(con, bins[idx], preserve_range=True, order=1))
     plt.savefig(os.path.join(results_dir, "performance.pdf"))
     plt.show()
     plt.close(f)
@@ -135,15 +137,20 @@ def main(path, channel=0):
     # mi = rcs.min()
     # rc = (rcs - mi) / mx
     rc = rcs.mean(0)
-    minmax = max(np.abs(rc[40:45, 40:45].min()), rc[40:45, 40:45].max())
+    # minmax = max(np.abs(rc[40:45, 40:45].min()), rc[40:45, 40:45].max())
+    minmax = max(np.abs(np.percentile(rc[50:60, 40:50], 5)), np.percentile(rc[50:60, 40:50], 95))
+    # minmax = max(np.percentile(con, 95), np.abs(np.percentile(con, 5)))  # max(np.abs(con.min()), con.max())
+    """
     if "circuit_exc" in path:
         minmax = minmax + minmax * 1
     elif "plaid_exc" in path:
         minmax = minmax + minmax
     else:
         minmax = minmax + minmax * 1
+    """
     # minmax = max(np.abs(rc.min()), rc.max())
-    plt.imshow(rc, cmap="RdBu_r", vmin=minmax * np.sign(con.min()), vmax=minmax)
+    # plt.imshow(rc, cmap="RdBu_r", vmin=minmax * np.sign(con.min()), vmax=minmax)
+    plt.imshow(rc, cmap="RdBu_r", vmin=-minmax, vmax=minmax)
     plt.colorbar()
     plt.axis("off")
     plt.savefig(os.path.join(results_dir, "mean_connectome.pdf"))

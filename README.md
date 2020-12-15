@@ -25,3 +25,11 @@
         - Get docker pids `docker ps`
         - Get docker job stdout `docker logs <pid>
 
+
+
+---
+# Extract BSDS tuning data
+- cd /media/data_cifs/projects/prj_neural_circuits/bsds_ibm
+- CUDA_VISIBLE_DEVICES=2 python run_job.py --experiment=BSDS500_test --model=BSDS_vgg_cheap_deepest_final_simple --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_100_hed_flips_thresh_2_2019_07_08_20_42_03_800563/model_152400.ckpt-152400 --test --out_dir=bsds_landscape --train=BSDS500_test_landscape --val=BSDS500_test_landscape --placeholders
+- Transfer to the mac and run `bsds_tuning.py`
+

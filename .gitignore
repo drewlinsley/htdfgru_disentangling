@@ -22,3 +22,5 @@ linear_moments
 linear_models
 cabc_images
 *.pyc
+run_circuit_exps_*
+*.swp

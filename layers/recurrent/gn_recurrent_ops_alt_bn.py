@@ -228,7 +228,7 @@ class GNRnOps(object):
             if not self.nonnegative:
                 inh = tf.nn.relu(self.mult) + inh  # self.recurrent_nl(inh)  #  + inh  #  * mask  # Hack -- let's just bypass this first iteration ^^ perturb_function(inh)
             else:
-                inh = tf.nn.relu(self.mult) + tf.nn.relu(inh)
+                inh = tf.nn.relu(self.mult) + self.recurrent_nl(inh)
         if self.nonnegative:
             return self.recurrent_nl(
                 self.recurrent_nl(x) - self.recurrent_nl(inh)), inh

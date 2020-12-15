@@ -139,7 +139,7 @@ def build_model(
             model_file=ff_model_file,
             train=False,
             timesteps=8,
-            perturb=1.10,  # 2.,  # 1.001,  # 17.1,
+            perturb=1.05,  # 2.,  # 1.001,  # 17.1,
             # perturb=.0000001,  # 2.,  # 1.001,  # 17.1,
             # perturb=.05,  # 2.,  # 1.001,  # 17.1
             perturb_norm=perturb_norm,
@@ -180,25 +180,15 @@ def build_model(
         activity = tf.matmul(
             tf.matmul(inv_clf, clf, transpose_b=True), sel_units, transpose_b=True)
 
-    # impatch = data_tensor[:, hh * 2 - 14: hh * 2 + 18, hw * 2 - 14: hw * 2 + 18]
-    mx = max(h, w)
-    x, y = np.meshgrid(np.arange(mx), np.arange(mx))
-    x = x[:h, :w]
-    y = y[:h, :w]
-    xy = np.stack((x, y), -1)
-    coord = np.asarray([hh, hw])[None]
-    dist = np.sqrt(((xy - coord) ** 2).mean(-1))
-    dist = dist / dist.max()
-    # penalty = tf.reduce_mean(tf.tanh(tf.abs(tf.squeeze(vgg.fgru_0))), -1) * dist
-    # dist = dist * tf.squeeze(vgg.mask)  # zero out units in the RF
-    # penalty = tf.cast(tf.sigmoid(tf.reduce_mean(tf.abs(tf.squeeze(vgg.fgru_0)), -1)) - 0.5, tf.float32) * dist.astype(np.float32)
-    penalty = tf.cast(tf.sigmoid(tf.reduce_mean(tf.abs(tf.squeeze(vgg.mult)), -1)) - 0.5, tf.float32) * dist.astype(np.float32)
-    # penalty = tf.cast(penalty, tf.float32) * tf.cast(1. - tf.squeeze(vgg.mask), tf.float32)  # 0 values in the H-diameter
-    penalty = penalty * 0.  # 1e-5
-    extra_activities = {"penalty": penalty}  # , "impatch": impatch}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
+    # bg = tf.reduce_mean(vgg.conv2_2 ** 2, reduction_indices=[-1], keep_dims=True)
+    # bg = tf.cast(tf.greater(bg, tf.reduce_mean(bg)), tf.float32)
+    # bg_dil = dilation2d(img=bg, extent=5)
+    # extra_activities = {"mask": bg, "mask_dil": bg_dil}  # {"mask": tf.reduce_mean(vgg.conv2_2 ** 2, reduction_indices=[-1])}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
+    # extra_activities = {"fgru": vgg.fgru_0, "penalty": tf.constant(0.), "conv": vgg.error_1}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
+    # extra_activities = {"fgru": vgg.fgru_0, "penalty": tf.constant(0.), "conv": vgg.error_1}  # tf.get_variable(name="perturb_viz")}  # idx: v for idx, v in enumerate(hs_0)}
+    extra_activities = {}
     if activity.dtype != tf.float32:
         activity = tf.cast(activity, tf.float32)
     # return [activity, h_deep], extra_activities
     return activity, extra_activities
-
 

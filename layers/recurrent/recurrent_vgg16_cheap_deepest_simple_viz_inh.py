@@ -372,7 +372,7 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                 # mult = tf.get_variable(name="perturb_viz_mult", initializer=np.ones((self.conv2_2.get_shape().as_list())).astype(np.float32), trainable=True)  # Perturbed fgru
                 # mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.ones_like(perturb_mask), trainable=True)  # Perturbed fgru
                 # mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.zeros_like(perturb_mask), trainable=True)  # Perturbed fgru
-                mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.random.normal(perturb_mask.shape, stddev=1e-4), trainable=True)  # Perturbed fgru
+                mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.random.normal(perturb_mask.shape, stddev=1e-1), trainable=True)  # Perturbed fgru
                 # mult = tf.get_variable(name="perturb_viz_mult", initializer=self.kernel_initializer, shape=perturb_mask.shape, trainable=True)  # Perturbed fgru
                 # mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.ones_like(perturb_mask) - tf.random.normal(perturb_mask.shape, stddev=1e-4), trainable=True)  # Perturbed fgru
                 # mult = tf.get_variable(name="perturb_viz_mult", initializer=tf.zeros_like(perturb_mask) - 0.01, trainable=True)  # Perturbed fgru
@@ -402,7 +402,7 @@ class Vgg16(GN, CreateGNParams, GNRnOps, GNFFOps):
                     # mask = ((1. - perturb_mask) * 0.6) + 0.2
                     mask = 1. - perturb_mask
                     kernel = tf.ones((3, 3, 128, 128), dtype=tf.float32)  #  / 9.            
-                    for rf in range(self.timesteps * 2):
+                    for rf in range(int(self.timesteps * 1)):
                        mask = tf.nn.conv2d(mask, kernel, strides=[1, 1, 1, 1], padding="SAME") 
                     mask = tf.cast(tf.not_equal(mask, 0), tf.float32)
                     sz = tf.reduce_max(tf.reduce_sum(mask[0, ..., 0], reduction_indices=[0])) // 2

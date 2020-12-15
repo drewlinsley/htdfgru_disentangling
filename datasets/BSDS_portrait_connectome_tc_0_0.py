@@ -97,15 +97,16 @@ class data_processing(object):
 
         # Logits for perturbation
         logits_b = np.load(self.perturb_a, allow_pickle=True)
-        logits_b = logits_b.squeeze()[109, 119].reshape(1, -1)  # T
+        # logits_b = logits_b.squeeze()[111, 121]
+        logits_b = logits_b.reshape(1, -1)
         print("Extracting tuning curves for targets.")
 
         # Logits for target
         lb = np.load(self.perturb_b, allow_pickle=True)
-        logits_a = lb["act"].squeeze()
+        logits_a = lb["conv2"].squeeze()
         del lb.f
         lb.close()
-        logits_a = logits_a[109: 109 + 4, 119: 119 + 4].reshape(1, -1)
+        logits_a = logits_a[111 - 2: 111 + 2, 121 - 2: 121 + 2].reshape(1, -1)
         print("Extracting tuning curves for targets.")
 
         # Combined logits

@@ -33,6 +33,10 @@ experiments = [
     ["circuit_exc_110_full_field", "orientation_probe", "../refactor_gammanet/orientation_probe_full_field_outputs/BSDS_vgg_gratings_simple_orientation_test_full_field_2020_12_10_16_46_24_554110.npz", "gammanet_full_orientation_probe_full_field_outputs_data.npy", 1.10, rng, "BSDS500_test_orientation_viz_inh", None],  # Demonstrate excitation/inh on T&B single-component stimuli  Exc
 
 
+    ["circuit_exc_105_full_field", "orientation_probe", "../refactor_gammanet/orientation_probe_full_field_outputs/BSDS_vgg_gratings_simple_orientation_test_full_field_2020_12_10_16_46_24_554110.npz", "gammanet_full_orientation_probe_full_field_outputs_data.npy", 1.05, rng, "BSDS500_test_orientation_viz_inh", None],  # Demonstrate excitation/inh on T&B single-component stimuli  Exc
+    ["circuit_inh_090_full_field", "orientation_probe", "../refactor_gammanet/orientation_probe_full_field_outputs/BSDS_vgg_gratings_simple_orientation_test_full_field_2020_12_10_16_46_24_554110.npz", "gammanet_full_orientation_probe_full_field_outputs_data.npy", 0.95, rng, "BSDS500_test_orientation_viz_inh", None],  # Demonstrate excitation/inh on T&B single-component stimuli  Exc
+
+
     ["circuit_inh_090_full_field", "orientation_probe", "../refactor_gammanet/orientation_probe_full_field_outputs/BSDS_vgg_gratings_simple_orientation_test_full_field_2020_12_10_16_46_24_554110.npz", "gammanet_full_orientation_probe_full_field_outputs_data.npy", 0.90, rng, "BSDS500_test_orientation_viz_inh", None],  # Demonstrate excitation/inh on T&B single-component stimuli  Exc
     ["circuit_inh_080_full_field", "orientation_probe", "../refactor_gammanet/orientation_probe_full_field_outputs/BSDS_vgg_gratings_simple_orientation_test_full_field_2020_12_10_16_46_24_554110.npz", "gammanet_full_orientation_probe_full_field_outputs_data.npy", 0.80, rng, "BSDS500_test_orientation_viz_inh", None],  # Demonstrate excitation/inh on T&B single-component stimuli  Exc
     ["circuit_inh_070_full_field", "orientation_probe", "../refactor_gammanet/orientation_probe_full_field_outputs/BSDS_vgg_gratings_simple_orientation_test_full_field_2020_12_10_16_46_24_554110.npz", "gammanet_full_orientation_probe_full_field_outputs_data.npy", 0.70, rng, "BSDS500_test_orientation_viz_inh", None],  # Demonstrate excitation/inh on T&B single-component stimuli  Exc
@@ -98,7 +102,7 @@ experiments = [
 ]
 
 for idx, experiment in enumerate(experiments):
-    gpu = 5  # idx + 1  # idx
+    gpu = (idx + 1) % 8  # idx
     exp_name = experiment[6]
     mod = experiment[7]
     cmd = "CUDA_VISIBLE_DEVICES={} python run_job.py --experiment={} --model=BSDS_exc_perturb --no_db --ckpt=/media/data_cifs/cluttered_nist_experiments/checkpoints/BSDS_vgg_cheap_deepest_final_simple_BSDS500_combos_100_no_aux_2019_05_20_00_56_41_386546/model_1240.ckpt-1240 --placeholders --out_dir=perturb_viz --train=orientation_tilt_viz --val=orientation_tilt_viz\n".format(gpu, exp_name)  # noqa
@@ -202,6 +206,11 @@ for idx, experiment in enumerate(experiments):
             model = "BSDS_exc_120_perturb"
         elif perturbation == 1.10:
             model = "BSDS_exc_110_perturb"
+        elif perturbation == 1.05:
+            model = "BSDS_exc_105_perturb"
+
+        elif perturbation == 0.95:
+           model = "BSDS_inh_095_perturb"
         elif perturbation == 0.90:
            model = "BSDS_inh_090_perturb"
         elif perturbation == 0.80:
