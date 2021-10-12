@@ -4,6 +4,6 @@ scikit-image==0.12.3
 sshtunnel==0.1.2
 psycopg2==2.7.1
 numpy
-opencv-python==3.2.0.7
+opencv-python==4.2.0.32
 pandas==0.20.2
 
